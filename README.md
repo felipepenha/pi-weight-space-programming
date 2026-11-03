@@ -54,13 +54,26 @@ This Pi harness extension supports **both** that strict zero-tool replication mo
 
 ## Running Without Global Installation
 
-It is **not** recommended to install this extension globally in `~/.pi/agent/settings.json`. Because `extensions/index.ts` implements Pi's `resources_discover` hook and the repository includes a `pi` package manifest in `package.json`, you can load it per-workspace via a project-local `.pi/settings.json` in any new directory tree you create, or per-invocation via CLI flags.
+It is **not** recommended to install this extension globally in `~/.pi/agent/settings.json`. Because this repository is configured as a full Pi package (with a `pi` manifest in `package.json`), you can install or configure it per-workspace via Git or a local directory, or load it per-invocation via CLI flags.
 
-### Option 1: Configure via `.pi/settings.json` in a New Directory
+### Option 1: Configure as a Project-Local Package via Git (Recommended)
 
-See Pi's extension locations documentation: <https://pi.dev/docs/latest/extensions#extension-locations>
+To configure the package for a specific workspace without installing it globally, you have two quick options:
 
-To configure the extension for a specific workspace without installing it globally, you only need to create a `.pi/settings.json` file inside a new working directory:
+#### A. Install via CLI (Fastest)
+
+Run `pi install -l` inside your workspace directory:
+
+```bash
+mkdir my-wsp-workspace && cd my-wsp-workspace
+pi install -l git:github.com/felipepenha/pi-weight-space-programming -a
+```
+
+This clones the repository into `my-wsp-workspace/.pi/git/` and configures `.pi/settings.json` automatically.
+
+#### B. Manual `.pi/settings.json`
+
+Create `.pi/settings.json` inside your working directory:
 
 ```text
 my-wsp-workspace/
@@ -68,34 +81,50 @@ my-wsp-workspace/
     └── settings.json
 ```
 
-Nothing else is required in the directory up front—bundled skills and prompt templates are discovered directly from the extension repository, and the sandbox working directory (`.wsp-work/`) is created automatically when a session starts.
-
-Point `my-wsp-workspace/.pi/settings.json` to this repository's extension (relative paths in `.pi/settings.json` resolve from `.pi/`, while `~` and absolute paths are also supported):
+Point `"packages"` to the Git repository:
 
 ```json
 {
   "$schema": "https://pi.dev/schemas/settings.schema.json",
   "defaultTools": [],
   "defaultThinkingLevel": "high",
-  "extensions": [
-    "/absolute/path/to/pi-weight-space-programming/extensions/index.ts"
+  "packages": [
+    "git:github.com/felipepenha/pi-weight-space-programming"
   ]
 }
 ```
 
-*(Alternatively, you can reference the repository root or git URL under `"packages": ["/absolute/path/to/pi-weight-space-programming"]` or `"packages": ["git:github.com/<owner>/pi-weight-space-programming"]` in `.pi/settings.json`, or run `pi install -l /absolute/path/to/pi-weight-space-programming` inside `my-wsp-workspace/` to write `.pi/settings.json` automatically.)*
+*(Alternatively, HTTPS `https://github.com/felipepenha/pi-weight-space-programming.git` or SSH `git@github.com:felipepenha/pi-weight-space-programming.git` are also supported. For local development on cloned code, you can instead point to a local directory via `"packages": ["/path/to/pi-weight-space-programming"]` or `"extensions": ["/path/to/pi-weight-space-programming/extensions/index.ts"]`.)*
 
 - Setting `"defaultTools": []` disables Pi's built-in file/shell tools (`read`, `bash`, `edit`, `write`) by default in that workspace while keeping all `wsp_*` extension tools active.
-- Then run `pi` from inside `my-wsp-workspace/` (pass `--approve` / `-a` to trust the project-local `.pi/settings.json` non-interactively, or approve when prompted in the TUI):
+- Bundled skills (`/skill:weight-space-reading`, etc.) and prompt templates are discovered automatically from the package manifest.
+- Run `pi` from inside `my-wsp-workspace/` (pass `--approve` / `-a` to trust project-local settings non-interactively):
 
 ```bash
 cd my-wsp-workspace
 pi -a
 ```
 
+### Updating the Package
+
+When this repository is configured as a Git package in your workspace, you can easily pull the latest updates, tool fixes, and skills:
+
+```bash
+# Update all project-local packages
+pi update -a --extensions
+
+# Or update this specific package
+pi update -a git:github.com/felipepenha/pi-weight-space-programming
+
+# Update both pi itself and all packages
+pi update --all
+```
+
+Pi fetches the latest git commits, updates cached files, and reloads the extension, skills, and prompt templates on your next session.
+
 ### Option 2: Load Directly via CLI (`--extension` / `-e`)
 
-You can also load the extension for a single run from anywhere without creating or modifying any settings files:
+If you have cloned the repository locally and want to load the extension for a single run without any workspace configuration files:
 
 ```bash
 pi --no-builtin-tools -e /path/to/pi-weight-space-programming/extensions/index.ts
