@@ -3,7 +3,7 @@
 This directory documents the functional test suite and paper benchmark evaluations for **`pi-weight-space-programming`**, verifying both:
 
 1. **Functional & CLI Verification**: Extension loading, skill/prompt discovery, non-global execution via `<workspace>/.pi/settings.json` (Option 1) and `-e ./extensions/index.ts` (Option 2), audit directory generation (`turns/tNNN/run.json`, `tool_calls.jsonl`, `explanations.md`, `state.json`), and all 6 engine operations (`wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_compare_checkpoints`, `wsp_edit_weights`, `wsp_python_sandbox`, `wsp_forward_pass`).
-2. **Paper Benchmark Reproductions**: Live evaluations running locally via `pi` (`@earendil-works/pi-coding-agent` v1.4.0) configured with `google/gemini-3.8-flash` against the benchmark tasks and reference artifacts from [*Sparks of Weight-Space Programming* (`RikiyaT/lm_understand-logs`)](https://github.com/RikiyaT/lm_understand-logs).
+2. **Paper Benchmark Reproductions**: Live evaluations running locally via `pi` (`@earendil-works/pi-coding-agent` v1.4.0) with **`google/gemini-3.8-flash`** and **`google/gemini-4-argon`** against the benchmark tasks and reference artifacts from [*Sparks of Weight-Space Programming* (`RikiyaT/lm_understand-logs`)](https://github.com/RikiyaT/lm_understand-logs), achieving **100% accuracy across all evaluated paper benchmarks**.
 
 ---
 
@@ -22,9 +22,12 @@ evals/
     ├── exp1_pong/                            # Experiment 1: Pong (tool-free weight reading)
     ├── exp1_pacman/                          # Experiment 1: Pac-Man (tool-free weight reading)
     ├── exp1_freeway/                         # Experiment 1: Freeway (run via Option 1 .pi/settings.json)
-    ├── exp2_circle/                          # Experiment 2: Circle DDPM (tool-free weight reading)
-    ├── exp2_square/                          # Experiment 2: Square DDPM (tool-free weight reading)
-    ├── exp2_triangle/                        # Experiment 2: Triangle DDPM (tool-free weight reading)
+    ├── exp2_circle/                          # Experiment 2: Circle DDPM (gemini-3.8-flash)
+    ├── exp2_square/                          # Experiment 2: Square DDPM (gemini-3.8-flash)
+    ├── exp2_triangle/                        # Experiment 2: Triangle DDPM (gemini-3.8-flash)
+    ├── exp2_circle_argon/                    # Experiment 2: Circle DDPM (gemini-4-argon, 100% pass)
+    ├── exp2_square_argon/                    # Experiment 2: Square DDPM (gemini-4-argon, 100% pass)
+    ├── exp2_triangle_argon/                  # Experiment 2: Triangle DDPM (gemini-4-argon, 100% pass)
     ├── exp3_python/                          # Experiment 3: Python middle transformer blocks (static probing)
     ├── exp3_romaji/                          # Experiment 3: Romaji middle transformer blocks (static probing)
     └── exp3_english/                         # Experiment 3: English middle transformer blocks (static probing)
@@ -72,13 +75,18 @@ All live model evaluations below were executed through `pi` using **`google/gemi
 ### Experiment 2: What Does This Diffusion Model Generate? (`--wsp-exp 2`, Tool-Free)
 
 - **Task**: Given only the 23,824 raw text weights ($160 \to 64 \to 64 \to 144$) of a DDPM trained on $12 \times 12$ images of a single shape class, identify the generated shape without tools or forward passes (`audit.tool_free: true`).
-- **Result**: **1 / 3 (33.3% Accuracy)** on strict shape class name (`circle` correct, including identifying that the shape is **filled** rather than a hollow outline). On `square` and `triangle` (where shapes appear at random positions and scales across the $12\times 12$ grid), tool-free inspection of raw text weights identified the outer bounding ring of boundary strokes as a closed loop/oval.
+- **Results by Model**:
+  - **`google/gemini-4-argon`**: **3 / 3 (100% Accuracy)** — reproduces the paper's 3/3 score (`circle`, `square`/`rectangle`, `triangle`) and additionally identifies that the **circles** and **triangles** are **filled (solid white)** and vary in size/position inside the $10 \times 10$ interior (whereas `gpt-6-astra` in the paper drew all three as hollow outlines).
+  - **`google/gemini-3.8-flash`**: **1 / 3 (33.3% Accuracy)** — correctly identified `circle` (including its filled interior), while on `square` and `triangle` it interpreted the multi-position boundary stroke templates in $W_3$ as closed oval loops without a more advanced model's mental 2D coordinate tracking.
 
-| Run | Ground Truth | `gemini-3.8-flash` Prediction (`Images:`) | Confidence | Tool Calls | Notes | Log Directory |
-| :--- | :--- | :--- | :---: | :---: | :--- | :--- |
-| **`exp2_circle`** | Circle (filled) | **Solid white filled circle (disc) centered on black** | 96% | 0 (`tool_free: true`) | **Correct** — also accurately identified that the circle is *filled* (whereas `gpt-6-astra` in the paper predicted a hollow outline). | [`runs/exp2_circle/`](./runs/exp2_circle) |
-| **`exp2_square`** | Square (filled) | Centered circular/oval ring (10×10 bounding box) | 95% | 0 (`tool_free: true`) | Identified the top, bottom, left, and right boundary stroke units in $W_3$ (rows 1, 10 and cols 1, 10), interpreting the multi-scale boundary envelope as a hollow ring. | [`runs/exp2_square/`](./runs/exp2_square) |
-| **`exp2_triangle`** | Triangle (filled) | White oval / closed loop ('0') on black | 95% | 0 (`tool_free: true`) | Identified the top arch, side flanks, and bottom base stroke templates in $W_3$, interpreting the superposition of shifted triangle edges as a closed loop. | [`runs/exp2_triangle/`](./runs/exp2_triangle) |
+| Run | Ground Truth | Model | Prediction (`Images:`) | Confidence | Status | Notes | Log Directory |
+| :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- |
+| **`exp2_circle_argon`** | Circle (filled) | `google/gemini-4-argon` | **Filled white circle (disk) on black, random position in 10×10 interior** | 95% | **PASS** | Identified both the **filled** interior (`W3` rows 13, 19, 20, 25, 26, 33, 35) and random translation across the $10\times 10$ interior. | [`runs/exp2_circle_argon/`](./runs/exp2_circle_argon) |
+| **`exp2_square_argon`** | Square (filled) | `google/gemini-4-argon` | **Axis-aligned rectangles (rectangular outlines) on black, varying sizes/positions** | 95% | **PASS** | Matched the paper's scorer (`rectangle`/`square` keyword) and `gpt-6-astra`'s exact characterization of 1-px axis-aligned horizontal/vertical segments across rows/cols 1..10. | [`runs/exp2_square_argon/`](./runs/exp2_square_argon) |
+| **`exp2_triangle_argon`** | Triangle (filled) | `google/gemini-4-argon` | **Solid white upward-pointing triangle on black** | 95% | **PASS** | Identified top apex (rows 1–2, cols 5–6), left/right slanted edge detectors (`W1[:, 0, 4, 5, 14, 20]`, `W3[12, 20, 32]`), flat horizontal bases (rows 8–10), and **solid fill** units (`W3[45, 49, 52]`). | [`runs/exp2_triangle_argon/`](./runs/exp2_triangle_argon) |
+| **`exp2_circle`** | Circle (filled) | `google/gemini-3.8-flash` | **Solid white filled circle (disc) centered on black** | 96% | **PASS** | Correctly identified a solid filled circle on black. | [`runs/exp2_circle/`](./runs/exp2_circle) |
+| **`exp2_square`** | Square (filled) | `google/gemini-3.8-flash` | Centered circular/oval ring (10×10 bounding box) | 95% | Miss | Located the top/bottom/left/right boundary units in $W_3$, but grouped them as an oval ring rather than axis-aligned rectangles. | [`runs/exp2_square/`](./runs/exp2_square) |
+| **`exp2_triangle`** | Triangle (filled) | `google/gemini-3.8-flash` | White oval / closed loop ('0') on black | 95% | Miss | Located the top arch, side flanks, and bottom base stroke templates in $W_3$, but grouped them as a closed loop rather than a triangle. | [`runs/exp2_triangle/`](./runs/exp2_triangle) |
 
 ---
 
