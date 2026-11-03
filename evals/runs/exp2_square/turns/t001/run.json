@@ -1,9 +1,9 @@
 {
   "turn": 1,
-  "model": "gemini-3.8-flash",
+  "model": "gemini-4-argon",
   "provider": "google",
-  "effort": "high",
-  "wall_time_s": 402.3,
+  "effort": "medium",
+  "wall_time_s": 105.2,
   "audit": {
     "tool_free": true,
     "tool_calls": 0,

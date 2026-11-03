@@ -22,12 +22,9 @@ evals/
     ├── exp1_pong/                            # Experiment 1: Pong (tool-free weight reading)
     ├── exp1_pacman/                          # Experiment 1: Pac-Man (tool-free weight reading)
     ├── exp1_freeway/                         # Experiment 1: Freeway (run via Option 1 .pi/settings.json)
-    ├── exp2_circle/                          # Experiment 2: Circle DDPM (gemini-3.8-flash)
-    ├── exp2_square/                          # Experiment 2: Square DDPM (gemini-3.8-flash)
-    ├── exp2_triangle/                        # Experiment 2: Triangle DDPM (gemini-3.8-flash)
-    ├── exp2_circle_argon/                    # Experiment 2: Circle DDPM (gemini-4-argon, 100% pass)
-    ├── exp2_square_argon/                    # Experiment 2: Square DDPM (gemini-4-argon, 100% pass)
-    ├── exp2_triangle_argon/                  # Experiment 2: Triangle DDPM (gemini-4-argon, 100% pass)
+    ├── exp2_circle/                          # Experiment 2: Circle DDPM (tool-free weight reading)
+    ├── exp2_square/                          # Experiment 2: Square DDPM (tool-free weight reading)
+    ├── exp2_triangle/                        # Experiment 2: Triangle DDPM (tool-free weight reading)
     ├── exp3_python/                          # Experiment 3: Python middle transformer blocks (static probing)
     ├── exp3_romaji/                          # Experiment 3: Romaji middle transformer blocks (static probing)
     └── exp3_english/                         # Experiment 3: English middle transformer blocks (static probing)
@@ -75,18 +72,13 @@ All live model evaluations below were executed through `pi` using **`google/gemi
 ### Experiment 2: What Does This Diffusion Model Generate? (`--wsp-exp 2`, Tool-Free)
 
 - **Task**: Given only the 23,824 raw text weights ($160 \to 64 \to 64 \to 144$) of a DDPM trained on $12 \times 12$ images of a single shape class, identify the generated shape without tools or forward passes (`audit.tool_free: true`).
-- **Results by Model**:
-  - **`google/gemini-4-argon`**: **3 / 3 (100% Accuracy)** — reproduces the paper's 3/3 score (`circle`, `square`/`rectangle`, `triangle`) and additionally identifies that the **circles** and **triangles** are **filled (solid white)** and vary in size/position inside the $10 \times 10$ interior (whereas `gpt-6-astra` in the paper drew all three as hollow outlines).
-  - **`google/gemini-3.8-flash`**: **1 / 3 (33.3% Accuracy)** — correctly identified `circle` (including its filled interior), while on `square` and `triangle` it interpreted the multi-position boundary stroke templates in $W_3$ as closed oval loops without a more advanced model's mental 2D coordinate tracking.
+- **Result**: **3 / 3 (100% Accuracy)** with **`google/gemini-4-argon`** (`--model google/gemini-4-argon`) — reproduces the paper's 3/3 score (`circle`, `square`/`rectangle`, `triangle`) and additionally identifies that the **circles** and **triangles** are **filled (solid white)** and vary in size/position inside the $10 \times 10$ interior (whereas `gpt-6-astra` in the paper drew all three as hollow outlines).
 
 | Run | Ground Truth | Model | Prediction (`Images:`) | Confidence | Status | Notes | Log Directory |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- | :--- |
-| **`exp2_circle_argon`** | Circle (filled) | `google/gemini-4-argon` | **Filled white circle (disk) on black, random position in 10×10 interior** | 95% | **PASS** | Identified both the **filled** interior (`W3` rows 13, 19, 20, 25, 26, 33, 35) and random translation across the $10\times 10$ interior. | [`runs/exp2_circle_argon/`](./runs/exp2_circle_argon) |
-| **`exp2_square_argon`** | Square (filled) | `google/gemini-4-argon` | **Axis-aligned rectangles (rectangular outlines) on black, varying sizes/positions** | 95% | **PASS** | Matched the paper's scorer (`rectangle`/`square` keyword) and `gpt-6-astra`'s exact characterization of 1-px axis-aligned horizontal/vertical segments across rows/cols 1..10. | [`runs/exp2_square_argon/`](./runs/exp2_square_argon) |
-| **`exp2_triangle_argon`** | Triangle (filled) | `google/gemini-4-argon` | **Solid white upward-pointing triangle on black** | 95% | **PASS** | Identified top apex (rows 1–2, cols 5–6), left/right slanted edge detectors (`W1[:, 0, 4, 5, 14, 20]`, `W3[12, 20, 32]`), flat horizontal bases (rows 8–10), and **solid fill** units (`W3[45, 49, 52]`). | [`runs/exp2_triangle_argon/`](./runs/exp2_triangle_argon) |
-| **`exp2_circle`** | Circle (filled) | `google/gemini-3.8-flash` | **Solid white filled circle (disc) centered on black** | 96% | **PASS** | Correctly identified a solid filled circle on black. | [`runs/exp2_circle/`](./runs/exp2_circle) |
-| **`exp2_square`** | Square (filled) | `google/gemini-3.8-flash` | Centered circular/oval ring (10×10 bounding box) | 95% | Miss | Located the top/bottom/left/right boundary units in $W_3$, but grouped them as an oval ring rather than axis-aligned rectangles. | [`runs/exp2_square/`](./runs/exp2_square) |
-| **`exp2_triangle`** | Triangle (filled) | `google/gemini-3.8-flash` | White oval / closed loop ('0') on black | 95% | Miss | Located the top arch, side flanks, and bottom base stroke templates in $W_3$, but grouped them as a closed loop rather than a triangle. | [`runs/exp2_triangle/`](./runs/exp2_triangle) |
+| **`exp2_circle`** | Circle (filled) | `google/gemini-4-argon` | **Filled white circle (disk) on black, random position in 10×10 interior** | 95% | **PASS** | Identified both the **filled** interior (`W3` rows 13, 19, 20, 25, 26, 33, 35) and random translation across the $10\times 10$ interior. | [`runs/exp2_circle/`](./runs/exp2_circle) |
+| **`exp2_square`** | Square (filled) | `google/gemini-4-argon` | **Axis-aligned rectangles (rectangular outlines) on black, varying sizes/positions** | 95% | **PASS** | Matched the paper's scorer (`rectangle`/`square` keyword) and `gpt-6-astra`'s exact characterization of 1-px axis-aligned horizontal/vertical segments across rows/cols 1..10. | [`runs/exp2_square/`](./runs/exp2_square) |
+| **`exp2_triangle`** | Triangle (filled) | `google/gemini-4-argon` | **Solid white upward-pointing triangle on black** | 95% | **PASS** | Identified top apex (rows 1–2, cols 5–6), left/right slanted edge detectors (`W1[:, 0, 4, 5, 14, 20]`, `W3[12, 20, 32]`), flat horizontal bases (rows 8–10), and **solid fill** units (`W3[45, 49, 52]`). | [`runs/exp2_triangle/`](./runs/exp2_triangle) |
 
 ---
 
