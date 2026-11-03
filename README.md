@@ -195,6 +195,12 @@ The extension resolves Python automatically in this order:
 
 ---
 
+## Tests & Paper Benchmark Evaluations
+
+See [`evals/README.md`](evals/README.md) for the complete functional test suite (`evals/functional/`) and preserved paper benchmark evaluation logs (`evals/runs/`) across Experiments 1–5.
+
+---
+
 ## License & Attributions
 
 This repository is licensed under the **Apache License 2.0** (see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE)).
