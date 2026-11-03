@@ -17,6 +17,7 @@ Copyright (c) 2026 the authors of "LLMs can understand and write neural network 
 """
 
 import ast
+import fnmatch
 import json
 import os
 import re
@@ -24,11 +25,15 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 ENGINE_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(ENGINE_DIR)
 if ENGINE_DIR not in sys.path:
     sys.path.insert(0, ENGINE_DIR)
 
@@ -988,6 +993,247 @@ if MODEL_PATH and os.path.exists(MODEL_PATH):
     }
 
 
+# ---------------------------------------------------------------------------
+# 6. Hugging Face Model Downloader (`hf_download`) - Strict Internet Exception
+# ---------------------------------------------------------------------------
+
+ALLOWED_HF_HOST_SUFFIXES = (
+    "huggingface.co",
+    ".huggingface.co",
+    ".cloudfront.net",
+    ".amazonaws.com",
+)
+
+
+class StrictHFRestrictedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Restricts HTTP redirects strictly to verified Hugging Face and LFS CDN hosts."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parsed = urllib.parse.urlparse(newurl)
+        host = (parsed.hostname or "").lower()
+        if not any(host == s or host.endswith(s) for s in ALLOWED_HF_HOST_SUFFIXES):
+            raise PermissionError(
+                f"Network request blocked by strict WSP security policy: redirect to non-Hugging Face host {host!r} is prohibited."
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _validate_hf_host(url: str):
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if not any(host == s or host.endswith(s) for s in ALLOWED_HF_HOST_SUFFIXES):
+        raise PermissionError(
+            f"Network request blocked by strict WSP security policy: host {host!r} is not an authorized Hugging Face endpoint."
+        )
+
+
+def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Download model weights and configuration files from Hugging Face Hub (huggingface.co).
+
+    Strict Internet Access Policy:
+    This tool constitutes a dedicated exception allowing downloads only from Hugging Face Hub.
+    General internet access, search engine queries, and arbitrary web requests remain strictly forbidden
+    across the entire WSP harness and Python sandbox.
+    """
+    repo_id = str(args.get("repo_id", "")).strip()
+    if not repo_id or not re.match(r"^[a-zA-Z0-9_\-\.]+(/[a-zA-Z0-9_\-\.]+)?$", repo_id):
+        raise ValueError(f"Invalid or missing Hugging Face repo_id: {repo_id!r}")
+
+    revision = str(args.get("revision", "main")).strip() or "main"
+    token = args.get("token") or os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+
+    # Safe destination directory under workspace / repo models
+    dest_dir = args.get("destination_dir")
+    if not dest_dir:
+        safe_name = repo_id.replace("/", "--")
+        dest_dir = os.path.join(REPO_ROOT, "models", safe_name)
+    dest_dir = os.path.abspath(dest_dir)
+    os.makedirs(dest_dir, exist_ok=True)
+
+    opener = urllib.request.build_opener(StrictHFRestrictedRedirectHandler())
+    headers = {
+        "User-Agent": "pi-weight-space-programming/0.1.0",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    # Query HF API for model metadata and file tree
+    api_url = f"https://huggingface.co/api/models/{repo_id}/revision/{urllib.parse.quote(revision, safe='')}"
+    _validate_hf_host(api_url)
+
+    req = urllib.request.Request(api_url, headers=headers)
+    try:
+        with opener.open(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as err:
+        if err.code in (401, 403):
+            raise PermissionError(
+                f"Hugging Face repository '{repo_id}' requires authentication or is gated (HTTP {err.code}). "
+                "Provide an authorized Hugging Face token via the 'token' parameter or set the HF_TOKEN environment variable."
+            ) from err
+        if err.code == 404:
+            raise FileNotFoundError(
+                f"Hugging Face repository '{repo_id}' (revision '{revision}') not found (HTTP 404)."
+            ) from err
+        raise RuntimeError(f"Hugging Face API request failed with HTTP {err.code}: {err.reason}") from err
+    except Exception as exc:
+        raise RuntimeError(f"Failed to connect to Hugging Face API: {exc}") from exc
+
+    siblings = [s.get("rfilename") for s in data.get("siblings", []) if s.get("rfilename")]
+
+    # Determine files to download
+    patterns = args.get("patterns")
+    single_file = args.get("filename")
+    filenames = args.get("filenames")
+
+    if single_file:
+        wanted_patterns = [single_file]
+    elif filenames:
+        wanted_patterns = list(filenames)
+    elif patterns:
+        wanted_patterns = list(patterns)
+    else:
+        # Default intelligent weight-space selection:
+        # safetensors, npz, bin, config, generation_config, tokenizer files
+        wanted_patterns = [
+            "*.safetensors",
+            "model.safetensors.index.json",
+            "config.json",
+            "generation_config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "vocab.json",
+            "merges.txt",
+            "special_tokens_map.json",
+        ]
+
+    matched_files = set()
+    for pattern in wanted_patterns:
+        if any(char in pattern for char in "*?[]"):
+            matches = [f for f in siblings if fnmatch.fnmatch(f, pattern)]
+            matched_files.update(matches)
+        else:
+            if pattern in siblings:
+                matched_files.add(pattern)
+            elif any(f.endswith("/" + pattern) or f == pattern for f in siblings):
+                matched_files.update([f for f in siblings if f.endswith("/" + pattern) or f == pattern])
+            else:
+                matched_files.add(pattern)
+
+    # Fallback: if no safetensors found in repo and no specific pattern given, look for .npz, .bin
+    if not (single_file or filenames or patterns):
+        has_safetensors = any(f.endswith(".safetensors") for f in matched_files)
+        if not has_safetensors:
+            for alt_ext in ("*.npz", "*.bin", "*.pt"):
+                alt_matches = [f for f in siblings if fnmatch.fnmatch(f, alt_ext)]
+                if alt_matches:
+                    matched_files.update(alt_matches)
+                    break
+
+    target_files = sorted(list(matched_files))
+    if not target_files:
+        raise ValueError(
+            f"No matching files found to download from '{repo_id}'. Available files in repository: {siblings[:25]}"
+        )
+
+    # Safety limit
+    max_files = int(args.get("max_files", 50))
+    if len(target_files) > max_files:
+        raise ValueError(
+            f"Matched {len(target_files)} files, which exceeds max_files={max_files}. Specify more restrictive patterns or filenames."
+        )
+
+    downloaded = []
+    total_bytes = 0
+
+    for rfilename in target_files:
+        clean_rel = os.path.normpath(rfilename)
+        if clean_rel.startswith("..") or os.path.isabs(clean_rel):
+            raise PermissionError(f"Directory traversal path blocked: {rfilename!r}")
+
+        dest_file_path = os.path.join(dest_dir, clean_rel)
+        os.makedirs(os.path.dirname(dest_file_path), exist_ok=True)
+
+        download_url = f"https://huggingface.co/{repo_id}/resolve/{urllib.parse.quote(revision, safe='')}/{urllib.parse.quote(rfilename, safe='/')}"
+        _validate_hf_host(download_url)
+
+        req = urllib.request.Request(download_url, headers=headers)
+        cached = False
+
+        force_download = bool(args.get("force_download", False))
+        cached = False
+
+        if not force_download and os.path.exists(dest_file_path) and os.path.getsize(dest_file_path) > 0:
+            try:
+                head_req = urllib.request.Request(download_url, headers=headers, method="HEAD")
+                with opener.open(head_req, timeout=15) as head_resp:
+                    remote_len = head_resp.headers.get("Content-Length")
+                    if remote_len and int(remote_len) == os.path.getsize(dest_file_path):
+                        cached = True
+            except Exception:
+                pass
+
+        if not cached:
+            tmp_path = dest_file_path + ".tmp"
+            try:
+                with opener.open(req, timeout=60) as resp:
+                    with open(tmp_path, "wb") as f_out:
+                        while True:
+                            chunk = resp.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            f_out.write(chunk)
+                os.replace(tmp_path, dest_file_path)
+                file_size = os.path.getsize(dest_file_path)
+            finally:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
+        else:
+            file_size = os.path.getsize(dest_file_path)
+
+        total_bytes += file_size
+        downloaded.append({
+            "filename": rfilename,
+            "path": dest_file_path,
+            "size_bytes": file_size,
+            "cached": cached,
+        })
+
+    # Determine primary model path
+    primary_model_path = None
+    safetensor_files = [d["path"] for d in downloaded if d["filename"].endswith(".safetensors")]
+    npz_files = [d["path"] for d in downloaded if d["filename"].endswith(".npz")]
+
+    if any(d["filename"] == "model.safetensors" for d in downloaded):
+        primary_model_path = next(d["path"] for d in downloaded if d["filename"] == "model.safetensors")
+    elif len(safetensor_files) == 1:
+        primary_model_path = safetensor_files[0]
+    elif len(safetensor_files) > 1:
+        primary_model_path = dest_dir
+    elif npz_files:
+        primary_model_path = npz_files[0]
+    else:
+        primary_model_path = dest_dir
+
+    return {
+        "ok": True,
+        "repo_id": repo_id,
+        "revision": revision,
+        "destination_dir": dest_dir,
+        "downloaded_files": downloaded,
+        "total_files": len(downloaded),
+        "total_bytes": total_bytes,
+        "primary_model_path": primary_model_path,
+        "policy_exception_notice": (
+            "Authorized Hugging Face Hub download exception. General internet browsing, search engines, "
+            "and unwhitelisted external network calls remain strictly blocked across the Pi WSP harness."
+        ),
+    }
+
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"error": "Usage: wsp_engine.py <command> [json_args]"}))
@@ -1002,6 +1248,7 @@ def main():
         "compare": cmd_compare,
         "edit": cmd_edit,
         "sandbox": cmd_sandbox,
+        "hf_download": cmd_hf_download,
     }
     if cmd not in dispatch:
         print(json.dumps({"error": f"Unknown command {cmd!r}"}))

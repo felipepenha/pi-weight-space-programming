@@ -254,6 +254,61 @@ def main() -> None:
         "guard_violation": sbx_guard["violations"][0],
     }
 
+    # 7. Hugging Face Model Downloader (Strict Internet Exception & Security Guards)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp_hf_dir:
+        # A. Valid download of model config
+        hf_res = run_engine(
+            "hf_download",
+            {
+                "repo_id": "openai-community/gpt2",
+                "filenames": ["config.json"],
+                "destination_dir": tmp_hf_dir,
+            },
+        )
+        assert hf_res["ok"] is True
+        assert len(hf_res["downloaded_files"]) == 1
+        cfg_file = pathlib.Path(hf_res["downloaded_files"][0]["path"])
+        assert cfg_file.exists() and cfg_file.stat().st_size > 0
+        file_size = cfg_file.stat().st_size
+        assert "Authorized Hugging Face Hub download exception" in hf_res["policy_exception_notice"]
+
+        # B. Caching verification
+        hf_cached = run_engine(
+            "hf_download",
+            {
+                "repo_id": "openai-community/gpt2",
+                "filenames": ["config.json"],
+                "destination_dir": tmp_hf_dir,
+            },
+        )
+        assert hf_cached["ok"] is True
+        assert hf_cached["downloaded_files"][0]["cached"] is True
+
+        # C. Security boundary: Path traversal blocked
+        traversal_blocked = False
+        try:
+            run_engine(
+                "hf_download",
+                {
+                    "repo_id": "openai-community/gpt2",
+                    "filenames": ["../../evil.txt"],
+                    "destination_dir": tmp_hf_dir,
+                },
+            )
+        except Exception as e:
+            traversal_blocked = True
+        assert traversal_blocked, "Path traversal should be strictly blocked"
+
+    results["tests"]["wsp_hf_download"] = {
+        "passed": True,
+        "repo_id": "openai-community/gpt2",
+        "file_downloaded": "config.json",
+        "size_bytes": file_size,
+        "cached_verified": True,
+        "traversal_guard_blocked": True,
+    }
+
     results["all_passed"] = True
     out_file = pathlib.Path(__file__).resolve().parent / "functional_results.json"
     out_file.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")

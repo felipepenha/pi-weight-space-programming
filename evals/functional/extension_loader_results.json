@@ -8,7 +8,8 @@
     "wsp_compare_checkpoints",
     "wsp_edit_weights",
     "wsp_python_sandbox",
-    "wsp_forward_pass"
+    "wsp_forward_pass",
+    "wsp_hf_download"
   ],
   "commands_registered": [
     "wsp",
@@ -16,7 +17,8 @@
     "wsp-exp",
     "wsp-apply-edits",
     "wsp-reset",
-    "wsp-header"
+    "wsp-header",
+    "wsp-hf-download"
   ],
   "cli_flags_registered": [
     "wsp-mode",
@@ -39,6 +41,8 @@
     "turn_end"
   ],
   "skills_loaded": [
+    "huggingface-model-download",
+    "uv-python-execution",
     "weight-space-reading",
     "weight-space-surgery",
     "weight-space-writing"

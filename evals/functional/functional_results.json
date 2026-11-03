@@ -170,6 +170,14 @@
       "sandbox_stdout": "SANDBOX_OK 6 ['W1', 'W2', 'W3', 'b1', 'b2', 'b3']",
       "guard_blocked_backward": true,
       "guard_violation": "Calling .backward() (gradient computation is forbidden in Weight-Space Programming)"
+    },
+    "wsp_hf_download": {
+      "passed": true,
+      "repo_id": "openai-community/gpt2",
+      "file_downloaded": "config.json",
+      "size_bytes": 665,
+      "cached_verified": true,
+      "traversal_guard_blocked": true
     }
   },
   "all_passed": true

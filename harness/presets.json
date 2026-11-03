@@ -9,7 +9,8 @@
         "wsp_compare_checkpoints",
         "wsp_edit_weights",
         "wsp_python_sandbox",
-        "wsp_forward_pass"
+        "wsp_forward_pass",
+        "wsp_hf_download"
       ],
       "neutralSystemPrompt": false,
       "explainEveryStep": false
@@ -22,13 +23,14 @@
       "explainEveryStep": false
     },
     "sandbox": {
-      "description": "Sandboxed Python & forward-pass harness (Experiments 3, 6). No shell/file tools; only WSP sandbox and budgeted passes.",
+      "description": "Sandboxed Python & forward-pass harness (Experiments 3, 6). No shell/file tools; only WSP sandbox, model download, and budgeted passes.",
       "thinkingLevel": "xhigh",
       "tools": [
         "wsp_python_sandbox",
         "wsp_inspect_weights",
         "wsp_edit_weights",
-        "wsp_forward_pass"
+        "wsp_forward_pass",
+        "wsp_hf_download"
       ],
       "neutralSystemPrompt": false,
       "explainEveryStep": false
@@ -41,7 +43,8 @@
         "wsp_circuit_probe",
         "wsp_compare_checkpoints",
         "wsp_python_sandbox",
-        "wsp_forward_pass"
+        "wsp_forward_pass",
+        "wsp_hf_download"
       ],
       "neutralSystemPrompt": false,
       "explainEveryStep": true
@@ -54,7 +57,8 @@
         "wsp_circuit_probe",
         "wsp_edit_weights",
         "wsp_python_sandbox",
-        "wsp_forward_pass"
+        "wsp_forward_pass",
+        "wsp_hf_download"
       ],
       "neutralSystemPrompt": false,
       "explainEveryStep": true
