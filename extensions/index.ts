@@ -715,19 +715,48 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 		updateStatusBar(ctx);
 	});
 
-	pi.on("before_agent_start", async (event) => {
+	pi.on("before_agent_start", async (event, ctx) => {
 		const promptText = event.messageType === "user" ? event.prompt : "";
 		auditLogger.beginTurn(promptText);
 
-		if (state.neutralSystemPrompt) {
-			// Exact 1-line neutral instruction from RikiyaT/lm_understand-logs/harness/instructions.md
+		// Expand @file references typed interactively (essential in tool-free mode where `read` is disabled)
+		let attachedFileBlock = "";
+		if (promptText && !promptText.includes("<file name=")) {
+			const atMatches = [...promptText.matchAll(/(?:^|\s)@([^\s]+)/g)];
+			for (const match of atMatches) {
+				const rawRef = match[1];
+				const candidates = [resolve(ctx.cwd, rawRef), resolve(REPO_ROOT, rawRef)];
+				for (const candidate of candidates) {
+					if (existsSync(candidate)) {
+						try {
+							const fileContent = readFileSync(candidate, "utf-8");
+							attachedFileBlock += `<file name="${candidate}">\n${fileContent}\n</file>\n`;
+						} catch {
+							// Ignore directories or unreadable files
+						}
+						break;
+					}
+				}
+			}
+		}
+
+		const systemPrompt = state.neutralSystemPrompt
+			? loadNeutralInstructions()
+			: `${event.systemPrompt}\n\n${buildWspGuidelines(state)}`;
+
+		if (attachedFileBlock) {
 			return {
-				systemPrompt: loadNeutralInstructions(),
+				systemPrompt,
+				message: {
+					customType: "wsp-file-attachment",
+					content: attachedFileBlock.trim(),
+					display: false,
+				},
 			};
 		}
 
 		return {
-			systemPrompt: `${event.systemPrompt}\n\n${buildWspGuidelines(state)}`,
+			systemPrompt,
 		};
 	});
 

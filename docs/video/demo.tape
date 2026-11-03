@@ -23,7 +23,7 @@ Type "cd /Users/fcpenha/git/pi-weight-space-programming"
 Enter
 Type "clear"
 Enter
-Type "pi -e extensions/index.ts --wsp-exp 1 --thinking low"
+Type "pi -e extensions/index.ts --wsp-exp 1 --wsp-effort low"
 Enter
 Sleep 3500ms
 Show
@@ -31,10 +31,13 @@ Show
 # 2. Pause on the banner so the viewer can take in the interface
 Sleep 2500ms
 
-# 3. Natural Language Prompt from Paper Experiment 1
-Type "Which game was this neural network trained on? Here are the observations from the weights: Channel 0 has large weights strictly at row 8; Channels 1 and 4 have velocity pairing across rows 1-8; Channel 2 has reward weights at rows 1-3; and only left and right actions are active."
-Sleep 1500ms
+# 3. Natural Language Prompt referencing the full 615-line weight prompt file from Experiment 1
+Type "Which game was this neural network trained on? @evals/.cache/paper_evals/exp1/breakout_prompt.txt"
+Sleep 800ms
+# First Enter accepts the @file autocomplete selection; second Enter submits the prompt
+Enter
+Sleep 600ms
 Enter
 
-# 4. Real live run: Pi processes the prompt and streams the mechanistic deduction
-Sleep 30s
+# 4. Real live run: Pi attaches the 17,253 weights and streams the mechanistic deduction
+Sleep 25s
