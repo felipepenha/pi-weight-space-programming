@@ -1,6 +1,6 @@
 [project]
 name = "pi-weight-space-programming"
-version = "0.0.1"
+version = "0.0.2"
 description = "Pi harness extension, tools, and skills for Weight-Space Programming: natively reading, interpreting, and editing neural network weights without gradient descent."
 readme = "README.md"
 requires-python = ">=3.10"

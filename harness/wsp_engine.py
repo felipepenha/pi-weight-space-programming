@@ -1000,6 +1000,8 @@ if MODEL_PATH and os.path.exists(MODEL_PATH):
 ALLOWED_HF_HOST_SUFFIXES = (
     "huggingface.co",
     ".huggingface.co",
+    "hf.co",
+    ".hf.co",
     ".cloudfront.net",
     ".amazonaws.com",
 )
@@ -1052,7 +1054,7 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
 
     opener = urllib.request.build_opener(StrictHFRestrictedRedirectHandler())
     headers = {
-        "User-Agent": "pi-weight-space-programming/0.0.1",
+        "User-Agent": "pi-weight-space-programming/0.0.2",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -1115,9 +1117,9 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
         else:
             if pattern in siblings:
                 matched_files.add(pattern)
-            elif any(f.endswith("/" + pattern) or f == pattern for f in siblings):
-                matched_files.update([f for f in siblings if f.endswith("/" + pattern) or f == pattern])
-            else:
+            elif any(f.endswith("/" + pattern) for f in siblings):
+                matched_files.update([f for f in siblings if f.endswith("/" + pattern)])
+            elif single_file or filenames:
                 matched_files.add(pattern)
 
     # Fallback: if no safetensors found in repo and no specific pattern given, look for .npz, .bin
