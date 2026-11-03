@@ -22,6 +22,7 @@ const WSP_TOOL_NAMES = [
 	"wsp_edit_weights",
 	"wsp_python_sandbox",
 	"wsp_forward_pass",
+	"wsp_hf_download",
 ] as const;
 
 function loadPresets(): WspPresetsFile {
@@ -608,6 +609,80 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 		},
 	});
 
+	pi.registerTool({
+		name: "wsp_hf_download",
+		label: "Download Hugging Face Model",
+		description:
+			"Download model weights (.safetensors, .npz), configs, and tokenizers directly from Hugging Face Hub (huggingface.co) into the workspace. Strict exception: only huggingface.co model endpoints are accessible; arbitrary internet search, browsing, and general network access remain strictly prohibited across the harness.",
+		annotations: {
+			readOnlyHint: false,
+			destructiveHint: false,
+			idempotentHint: true,
+			openWorldHint: true,
+		},
+		parameters: Type.Object({
+			repo_id: Type.String({
+				description: "Hugging Face repository ID (e.g. 'openai-community/gpt2', 'meta-llama/Llama-3.2-1B')",
+			}),
+			filename: Type.Optional(
+				Type.String({
+					description: "Specific file to download (e.g. 'model.safetensors', 'config.json')",
+				}),
+			),
+			filenames: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "List of specific files to download",
+				}),
+			),
+			patterns: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Glob patterns of files to download (e.g. ['*.safetensors', '*.json'])",
+				}),
+			),
+			revision: Type.Optional(
+				Type.String({
+					description: "Branch, tag, or commit hash (default: 'main')",
+				}),
+			),
+			destination_dir: Type.Optional(
+				Type.String({
+					description: "Local directory to store downloaded assets (default: './models/<repo_id>')",
+				}),
+			),
+			token: Type.Optional(
+				Type.String({
+					description: "Hugging Face API token for private or gated models (or set HF_TOKEN env var)",
+				}),
+			),
+			set_as_active_model: Type.Optional(
+				Type.Boolean({
+					description: "Automatically set the downloaded model as the active checkpoint for WSP tools (default: true)",
+				}),
+			),
+		}),
+		async execute(_id, params, _signal, _onUpdate, ctx) {
+			const t0 = Date.now();
+			const dest = params.destination_dir || join(ctx.cwd, "models", params.repo_id.replace("/", "--"));
+			const res = runWspEngine("hf_download", { ...params, destination_dir: dest }, state);
+			if (res.primary_model_path && params.set_as_active_model !== false) {
+				state.modelPath = res.primary_model_path;
+			}
+			updateStatusBar(ctx);
+			const text = JSON.stringify(res, null, 2);
+			auditLogger.logToolCallJsonl(state, {
+				kind: "hf_download",
+				s: Number(((Date.now() - t0) / 1000).toFixed(2)),
+				request: params,
+				out: text.slice(0, 6000),
+			});
+			return {
+				content: [{ type: "text", text }],
+				details: res,
+				isError: !res.ok,
+			};
+		},
+	});
+
 	// 4. Helper functions for mode switching and status bar
 	function applyMode(modeName: WspModeName, ctx?: ExtensionContext) {
 		const modeCfg = presets.modes[modeName];
@@ -925,6 +1000,44 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 					: "Restored built-in Pi header.",
 				"info",
 			);
+		},
+	});
+
+	pi.registerCommand("wsp-hf-download", {
+		description: "Download a model checkpoint from Hugging Face Hub: /wsp-hf-download <repo_id> [pattern_or_file]",
+		handler: async (args, ctx) => {
+			const parts = (args || "").trim().split(/\s+/).filter(Boolean);
+			const repoId = parts[0];
+			if (!repoId) {
+				ctx.ui.notify("Usage: /wsp-hf-download <repo_id> [filename_or_pattern]", "warning");
+				return;
+			}
+			const patternOrFile = parts[1];
+			const dest = join(ctx.cwd, "models", repoId.replace("/", "--"));
+			const payload: Record<string, unknown> = {
+				repo_id: repoId,
+				destination_dir: dest,
+			};
+			if (patternOrFile) {
+				if (patternOrFile.includes("*") || patternOrFile.includes("?")) {
+					payload.patterns = [patternOrFile];
+				} else {
+					payload.filename = patternOrFile;
+				}
+			}
+			ctx.ui.notify(`Downloading ${repoId} from Hugging Face...`, "info");
+			try {
+				const res = runWspEngine("hf_download", payload, state);
+				if (res.primary_model_path) {
+					state.modelPath = res.primary_model_path;
+					updateStatusBar(ctx);
+					ctx.ui.notify(`Downloaded ${repoId} -> active model: ${res.primary_model_path}`, "info");
+				} else {
+					ctx.ui.notify(`Downloaded ${repoId} (${res.downloaded_files?.length || 0} files)`, "info");
+				}
+			} catch (err: any) {
+				ctx.ui.notify(`Failed to download ${repoId}: ${err.message}`, "error");
+			}
 		},
 	});
 }

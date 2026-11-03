@@ -29,6 +29,7 @@ Inspired by and adapted from the paper and experiment audit repository:
 <tr><td><b>Direct Weight Compilation</b></td><td>Compile symbolic algorithms, coordinate trackers, boolean logic gates, and multi-step board propagation directly into neural network weight matrices from scratch without training.</td></tr>
 <tr><td><b>Surgical Model Editing</b></td><td>Apply gradient-free weight edits via the <code>edits</code> DSL, directional subspace projection $W' = W - \alpha u(u^\top W)$, neuron/head ablation, or rank-one updates with verified <code>bfloat16</code> diff manifests.</td></tr>
 <tr><td><b>Anti-Training Python Sandbox</b></td><td>Isolated CPU-only, network-disabled Python sandbox preloaded with <code>Checkpoint</code>, <code>Tokenizer</code>, <code>load()</code>, and <code>save_edit()</code>, with AST guards blocking <code>.backward()</code>, <code>torch.optim</code>, and regression fitting.</td></tr>
+<tr><td><img src="assets/huggingface.svg" alt="Hugging Face" width="18" height="18" valign="middle"> <b>Hugging Face Model Downloads</b></td><td>Strict, domain-restricted exception to download checkpoints (<code>.safetensors</code>, configs, tokenizers) directly from Hugging Face Hub (<code>huggingface.co</code>) with path-traversal guards and automatic active-model binding.</td></tr>
 <tr><td><b>Paper Experiments 1–8 Presets</b></td><td>One-flag replication (<code>--wsp-exp 1..8</code>) configuring exact tool modes, reasoning effort (<code>high</code>, <code>xhigh</code>, <code>max</code>), sandbox run limits, forward-pass budgets, and <code>lm_understand-logs</code> audit traces.</td></tr>
 </table>
 
@@ -47,10 +48,13 @@ This Pi harness extension supports **both** that strict zero-tool replication mo
    - `wsp_edit_weights`: Applies gradient-free surgical edits via the `edits` DSL (Experiments 4 & 5), directional subspace projection $W' = W - \alpha u(u^\top W)$ on top-$K$ columns (Experiment 8), unit/head ablation, or rank-one updates. Enforces protected-tensor guards (`embed_tokens`, `lm_head`, final `norm`, and pure scalar multiplication checks) and generates compact `sparse` / `lowrank` bfloat16 diff manifests (`manifest.json` + `edit.npz`).
    - `wsp_python_sandbox`: Executes Python in an isolated CPU-only, network-disabled sandbox preloaded with `Checkpoint`, `Tokenizer`, `load()`, `load_original()`, `save_edit()`, `drop_edit()`, `edited()`, `save()`, and `saved()`, while blocking gradient descent / training constructs (`.backward()`, `torch.optim`, `autograd`, `sklearn` fitting).
    - `wsp_forward_pass`: Tracks strict forward-pass budgets (e.g., 0, 10, 25, or 50 passes) for `attention_probe` (Experiment 7), `teacher_forced` (Experiment 8), `games_or_positions` (Experiment 6), and `paired_generate` (Experiment 8).
+   - `wsp_hf_download`: Downloads model weights (`.safetensors`, `.npz`), configs, and tokenizers from Hugging Face Hub (`huggingface.co`). **Strict network exception**: only verified Hugging Face asset endpoints are reachable; general internet search, arbitrary browsing, and sandbox network access remain strictly prohibited.
 2. **Built-in Agent Skills**:
    - `weight-space-reading`: Methodology for reading input/output geometries, static $W_{QK}$/$W_{OV}$ circuit composition, and checkpoint comparison without forward passes.
    - `weight-space-writing`: Methodology for compiling symbolic algorithms, coordinate trackers, boolean gates, and multi-step board propagation directly into weight matrices from scratch.
    - `weight-space-surgery`: Four-step methodology for diagnosing failure modes, localizing responsible heads/MLP directions, applying minimal surgical projections or bypass paths, and verifying dose-response on paired samples.
+   - `huggingface-model-download`: Methodology and best practices for downloading model weights and architectures from Hugging Face Hub, handling gated repos with tokens, and immediately inspecting them in weight space.
+   - `uv-python-execution`: Project-level guide for running scripts, evaluations, and tools using `uv run` and `uvx`.
 3. **Audit Logging (`RikiyaT/lm_understand-logs` Format)**:
    - When `--wsp-log-dir <dir>` is passed, records per-turn audit traces (`turns/tNNN/{prompt.txt, answer.md, run.json}` with `audit.tool_free`, `tool_calls.jsonl`, `explanations.md`, `final_answer.md`, `state.json`, and `instructions.md`).
 
@@ -81,6 +85,7 @@ pi -a
 
 Place any model checkpoint (`.safetensors`, `.npz`, `.npy`, or raw weight text files) in your workspace and ask Pi directly in chat:
 
+- **Download open weights from Hugging Face**: *"Download `openai-community/gpt2` from Hugging Face and inspect its attention circuits."*
 - **Read raw weights**: *"Which game was this neural network trained on? @path/to/weights.txt"*
 - **Inspect architecture & circuits**: *"Inspect `./model.npz` without running forward passes—what are its layers, singular value spectra, and copying attention heads doing?"*
 - **Compare checkpoints**: *"Compare `./base.safetensors` and `./finetuned.safetensors` in weight space and identify which layers changed the most."*
@@ -97,11 +102,15 @@ You can also switch paper presets mid-session inside the chat UI using `/wsp-exp
 
 | Mode | Active Tools | Thinking Level | System Prompt | Purpose |
 |---|---|---|---|---|
-| `full` *(default)* | All 6 `wsp_*` tools | `high` | WSP guidelines | Interactive weight-space exploration, circuit analysis, and editing |
+| `full` *(default)* | All 7 `wsp_*` tools (incl. `wsp_hf_download`) | `high` | WSP guidelines | Interactive weight-space exploration, circuit analysis, and editing |
 | `tool-free` | None (`audit.tool_free = true`) | `high` | Neutral 1-line (`harness/instructions.md`) | Pure in-context weight reading & one-shot `edits` writing (Exps 1, 2, 4, 5) |
-| `sandbox` | `wsp_python_sandbox`, `wsp_inspect_weights`, `wsp_edit_weights`, `wsp_forward_pass` | `xhigh` | WSP guidelines | From-scratch large network construction & budgeted passes (Exp 6) |
-| `mech-interp` | `wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_compare_checkpoints`, `wsp_python_sandbox`, `wsp_forward_pass` | `xhigh` | WSP + `EXPLAIN EVERY STEP` | Transformer circuit analysis & checkpoint comparison (Exps 3, 7) |
-| `surgical-edit` | `wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_edit_weights`, `wsp_python_sandbox`, `wsp_forward_pass` | `max` | WSP + `EXPLAIN EVERY STEP` | Targeted weight surgery with diff manifests (Exps 4, 8) |
+| `sandbox` | `wsp_python_sandbox`, `wsp_inspect_weights`, `wsp_edit_weights`, `wsp_forward_pass`, `wsp_hf_download` | `xhigh` | WSP guidelines | From-scratch large network construction & budgeted passes (Exp 6) |
+| `mech-interp` | `wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_compare_checkpoints`, `wsp_python_sandbox`, `wsp_forward_pass`, `wsp_hf_download` | `xhigh` | WSP + `EXPLAIN EVERY STEP` | Transformer circuit analysis & checkpoint comparison (Exps 3, 7) |
+| `surgical-edit` | `wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_edit_weights`, `wsp_python_sandbox`, `wsp_forward_pass`, `wsp_hf_download` | `max` | WSP + `EXPLAIN EVERY STEP` | Targeted weight surgery with diff manifests (Exps 4, 8) |
+
+> [!NOTE]
+> **Strict Internet Prohibition & Model Download Exception**:
+> The sandbox (`wsp_python_sandbox`), forward passes (`wsp_forward_pass`), and all mechanistic analysis tools are strictly isolated offline (`http_proxy` blocked, anti-training AST checks enabled). The `wsp_hf_download` tool and `/wsp-hf-download` command are a **dedicated, strictly enforced exception** allowing network requests *only* to verified Hugging Face endpoints (`huggingface.co`) to retrieve model weights and configs. General internet search, browsing, or external API access remain strictly forbidden.
 
 ### CLI Flags
 
@@ -123,9 +132,56 @@ You can also switch paper presets mid-session inside the chat UI using `/wsp-exp
 - `/wsp`: Display current Weight-Space Programming mode, active model, thinking effort, sandbox/pass budgets, and edited tensors.
 - `/wsp-mode <mode>`: Switch harness mode mid-session.
 - `/wsp-exp <1..8>`: Switch to an Experiment 1–8 configuration mid-session.
+- `/wsp-hf-download <repo_id> [pattern_or_file]`: Download a model checkpoint, configs, or tokenizers from Hugging Face Hub (e.g. `/wsp-hf-download openai-community/gpt2` or `/wsp-hf-download meta-llama/Llama-3.2-1B *.safetensors`) and set it as the active model.
 - `/wsp-apply-edits <checkpoint> [output.npz]`: Parse the last ```` ```edits ```` block from the assistant's reply (in `tool-free` mode) and apply it to `<checkpoint>`, producing `<output.npz>` and a verified diff manifest.
 - `/wsp-reset`: Reset sandbox run counters, forward-pass counters, and session audit state.
 - `/wsp-header [on|off|toggle]`: Toggle between the colorful Weight-Space Programming ASCII startup banner and Pi's built-in header.
+
+---
+
+## <img src="assets/huggingface.svg" alt="Hugging Face" width="28" height="28" valign="middle"> Hugging Face Model Downloads & Strict Network Exception Policy
+
+This repository is built upon a **strict internet connection prohibition** to enforce pure mechanistic reasoning and prevent contamination from external data or automated training:
+- The Python sandbox (`wsp_python_sandbox`) runs in an offline CPU environment with `http_proxy: http://127.0.0.1:0` and `NO_PROXY: "*"`.
+- Anti-training AST guards actively block `.backward()`, `torch.optim`, `autograd`, and statistical fitting.
+- General shell, curl, web browsing, and search tools are completely disabled in the harness.
+
+### The Dedicated Hugging Face Exception
+
+To enable practical mechanistic analysis on modern open-weights models without requiring cumbersome manual weight transfers, this harness provides a **strictly bounded exception**:
+
+> [!IMPORTANT]
+> **Strict Network Scope Restriction**:
+> The `wsp_hf_download` tool and `/wsp-hf-download` slash command connect **exclusively** to `huggingface.co` (and verified CloudFront/S3 storage endpoints redirected directly by Hugging Face LFS resolution).
+> - **Permitted**: Fetching model weights (`.safetensors`, `.npz`), architectures (`config.json`), and tokenizers from Hugging Face Hub.
+> - **Strictly Prohibited**: General internet search, web browsing, scraping, external APIs, and any outbound network access from user Python code. The Python sandbox remains 100% offline.
+
+### How to Use
+
+#### 1. In Natural Language
+- *"Download `openai-community/gpt2` from Hugging Face and inspect its tensor shapes and singular value spectra."*
+- *"Download `meta-llama/Llama-3.2-1B` (only `*.safetensors` and `config.json`) using token `$HF_TOKEN`."*
+
+#### 2. Slash Command
+```bash
+# Download default weights & config and set active checkpoint
+/wsp-hf-download openai-community/gpt2
+
+# Download specific patterns or single files
+/wsp-hf-download meta-llama/Llama-3.2-1B *.safetensors
+/wsp-hf-download google/gemma-2-2b config.json
+```
+
+#### 3. Tool Call (`wsp_hf_download`)
+```json
+{
+  "repo_id": "openai-community/gpt2",
+  "patterns": ["*.safetensors", "config.json", "tokenizer.json"],
+  "destination_dir": "./models/gpt2",
+  "set_as_active_model": true
+}
+```
+When `set_as_active_model: true` (default), the downloaded model is automatically bound to `state.modelPath`, allowing subsequent calls to `wsp_inspect_weights`, `wsp_circuit_probe`, or `wsp_edit_weights` to execute seamlessly with zero manual path configuration.
 
 ---
 
