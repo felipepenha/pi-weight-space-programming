@@ -24,19 +24,23 @@ When given a policy network or generative model (e.g., DDPM or grid-world actor)
 
 When embeddings (`wte`) and unembeddings (`lm_head`) are absent or frozen, individual residual stream coordinates have no vocabulary labels, but **basis-invariant linear algebra** on the weight matrices reveals the circuit structure:
 
-1. **Compute Per-Head $W_{QK}$ and $W_{OV}$ Matrices**:
-   - Use `wsp_circuit_probe` with `operation: "qk_ov_analysis"` or `"induction_heads"`.
-   - For each layer $l$ and head $h$, form the residual-space operators:
-     $$W_{QK}^{(l,h)} = W_Q^{(l,h)\top} W_K^{(l,h)}, \qquad W_{OV}^{(l,h)} = W_O^{(l,h)} W_V^{(l,h)}$$
-2. **Detect Copying / Induction Heads Purely from Weights**:
-   - An induction circuit requires an earlier "previous-token" head $(l_1, h_1)$ that writes shifted token information into the residual stream via $W_{OV}^{(l_1, h_1)}$, and a downstream head $(l_2, h_2)$ ($l_2 > l_1$) whose key matrix reads that subspace via K-composition:
-     $$C_K\big((l_1, h_1) \to (l_2, h_2)\big) = \frac{\| W_{QK}^{(l_2, h_2)} W_{OV}^{(l_1, h_1)} \|_F}{\| W_{QK}^{(l_2, h_2)} \|_F \, \| W_{OV}^{(l_1, h_1)} \|_F}$$
-   - Confirm that the candidate downstream head $(l_2, h_2)$ also acts as a copying operator by checking that $W_{OV}^{(l_2, h_2)}$ has a positive trace / dominant positive real eigenvalues.
-   - **Domain signature**: Code corpora (e.g., Python) repeat multi-character identifiers heavily and develop significantly more strong copying/induction heads than prose.
-3. **Measure Output Subspace Effective Rank**:
-   - Use `wsp_circuit_probe` with `operation: "subspace_rank"`.
-   - Compute the singular value spectrum and participation ratio $\frac{(\sum \sigma_i^2)^2}{\sum \sigma_i^4}$ of the final block's $W_O$ and MLP projection $W_{\text{proj}}$.
-   - A restricted character alphabet (e.g., Romaji, which omits letters like `q`, `l`, `v`, `x`) writes into a lower-dimensional effective subspace in the final block compared to full-alphabet English or code.
+1. **Compute LayerNorm-Centered Per-Head $M_{l,h}$ ($W_{QK}$) and $B_{l,h}$ ($W_{OV}$) Matrices**:
+   - Use `wsp_circuit_probe` with `operation: "induction_heads"` (and `operation: "subspace_rank"`).
+   - Incorporate LayerNorm gain $g_l = \texttt{ln1\_w.}l$ and mean-centering $P = I_d - \frac{1}{d}\mathbf{1}\mathbf{1}^\top$:
+     $$q_e = (W_q^{(l,h)} \operatorname{diag}(g_l)) P, \quad k_e = (W_k^{(l,h)} \operatorname{diag}(g_l)) P, \quad v_e = (W_v^{(l,h)} \operatorname{diag}(g_l)) P$$
+     $$M_{l,h} = \frac{1}{\sqrt{d_{\text{head}}}} q_e^\top k_e, \qquad B_{l,h} = P \, W_o^{(l,h)} v_e$$
+2. **Detect Copying / Induction Heads via Directional K-Composition vs. Q-Composition Trace Cosine**:
+   - An induction circuit uses an earlier previous-token head $(p, h)$ ($p < l$) whose output $B_{p,h}$ shifts previous-token keys into the current key subspace of later head $(l, j)$:
+     $$C_k = \frac{\operatorname{tr}(M_{l,j} B_{p,h})}{\|M_{l,j}\|_F \, \|B_{p,h}\|_F}, \qquad C_q = \frac{\operatorname{tr}(M_{l,j} B_{p,h}^\top)}{\|M_{l,j}\|_F \, \|B_{p,h}\|_F}, \qquad \Delta C = C_k - C_q$$
+   - In `wsp_circuit_probe` (`operation: "induction_heads"`), inspect `ranked_candidate_copying_heads`: true copying/induction heads in layers 2 and 3 have **strongly positive directional key-composition trace match** (`max_c_k_trace_cos > 0.06` and `score > 0.07`, especially when `best_prev_token_src` is a shared shifted-context head like `2.2`, `0.5`, `0.2`, or `0.3`).
+   - **Domain signature**:
+     - **Python code** repeats multi-character identifiers heavily and develops **multiple (3) strong copying heads across layers 2 and 3** (e.g., `3.5`, `3.1`, `2.1`, all with `score > 0.09`).
+     - **Natural language prose** (English / Romaji) typically has **1 primary copying head in layer 3** (e.g., `3.1` or `3.3`).
+3. **Measure Alphabet Bottleneck via Final-MLP Input-Regressed Output Spectrum**:
+   - Use `wsp_circuit_probe` with `operation: "subspace_rank"` and inspect `mlp_input_regressed_alphabet_bottleneck` for the final layer (`layer: 3`).
+   - Regressing out the MLP input subspace $U_{\text{in}}$ of $W_{\text{fc}.3}$ from $P W_{\text{proj}.3}$ ($R = O - (O U_{\text{in}}) U_{\text{in}}^\top$) reveals a sharp singular value cliff (`top_singular_value_gaps_rank_16_to_50`) at the effective character alphabet size:
+     - **Romaji** omits several Latin letters (`q, l, v, x`), producing its largest singular value cliff at **rank 21–24** (`rank_1based: 24`, `energy_top24_fraction >= 0.945`).
+     - **English** and **Python** use the full Latin alphabet, placing their dominant singular value cliff at **rank 28–30** (`rank_1based: 28`, `energy_top24_fraction <= 0.93`).
 
 ## 3. Comparing Fine-Tuned Checkpoints ($A$ vs. $B$)
 

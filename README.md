@@ -1,10 +1,32 @@
-# pi-weight-space-programming
+<p align="center">
+  <img src="assets/banner.png" alt="Pi Weight Space Programming" width="100%">
+</p>
+
+# Pi Weight-Space Programming (π · WSP)
+
+<p align="center">
+  <a href="https://pi.dev">Pi Coding Agent</a> | <a href="https://rikiyat.github.io/blog/weight-space-programming/">Weight-Space Programming Paper</a> | <a href="https://github.com/RikiyaT/lm_understand-logs">Experiment Audit Logs</a>
+</p>
+<p align="center">
+  <a href="https://pi.dev"><img src="https://img.shields.io/badge/Harness-Pi%20Coding%20Agent-FF5252?style=for-the-badge" alt="Pi Coding Agent"></a>
+  <a href="https://rikiyat.github.io/blog/weight-space-programming/"><img src="https://img.shields.io/badge/Paradigm-Weight--Space%20Programming-E52424?style=for-the-badge" alt="Weight-Space Programming"></a>
+  <a href="https://github.com/RikiyaT/lm_understand-logs"><img src="https://img.shields.io/badge/Gradients-%E2%88%87%CE%B8L%20%3D%200%20(No%20SGD)-B41414?style=for-the-badge" alt="No Gradient Descent"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-7A0A0A?style=for-the-badge" alt="License: Apache 2.0"></a>
+</p>
 
 A [Pi](https://pi.dev) harness extension, tool suite, and skill collection for **Weight-Space Programming**—enabling language models to natively read, interpret, construct, and surgically edit neural network weights without gradient descent or fine-tuning.
 
 Inspired by and adapted from the paper and experiment audit repository:
 - **Paper / Blog Post**: [*Sparks of Weight-Space Programming: LLMs can natively read & write neural network weights*](https://rikiyat.github.io/blog/weight-space-programming/) by Rikiya Takehi, Jayden Teoh, Alex Zhang, and Omar Khattab (2026)
 - **Original Experiment Logs & Codex Harness**: [`RikiyaT/lm_understand-logs`](https://github.com/RikiyaT/lm_understand-logs)
+
+<table>
+<tr><td><b>Static Weight-Space Reading</b></td><td>Inspect <code>.safetensors</code> (<code>BF16</code>/<code>F16</code>/<code>F32</code>), <code>.npz</code>, and <code>.npy</code> checkpoints directly—computing SVD spectra, effective rank, QK/OV attention circuits, induction heads, and token projections with zero forward passes.</td></tr>
+<tr><td><b>Direct Weight Compilation</b></td><td>Compile symbolic algorithms, coordinate trackers, boolean logic gates, and multi-step board propagation directly into neural network weight matrices from scratch without training.</td></tr>
+<tr><td><b>Surgical Model Editing</b></td><td>Apply gradient-free weight edits via the <code>edits</code> DSL, directional subspace projection $W' = W - \alpha u(u^\top W)$, neuron/head ablation, or rank-one updates with verified <code>bfloat16</code> diff manifests.</td></tr>
+<tr><td><b>Anti-Training Python Sandbox</b></td><td>Isolated CPU-only, network-disabled Python sandbox preloaded with <code>Checkpoint</code>, <code>Tokenizer</code>, <code>load()</code>, and <code>save_edit()</code>, with AST guards blocking <code>.backward()</code>, <code>torch.optim</code>, and regression fitting.</td></tr>
+<tr><td><b>Paper Experiments 1–8 Presets</b></td><td>One-flag replication (<code>--wsp-exp 1..8</code>) configuring exact tool modes, reasoning effort (<code>high</code>, <code>xhigh</code>, <code>max</code>), sandbox run limits, forward-pass budgets, and <code>lm_understand-logs</code> audit traces.</td></tr>
+</table>
 
 ---
 
@@ -148,6 +170,7 @@ pi -a --model google/gemini-3.1-pro-preview:xhigh
 | `--wsp-pass-budget <n>` | Set forward-pass budget (e.g., `0`, `10`, `25`, `50`) |
 | `--wsp-max-runs <n>` | Set maximum Python sandbox runs (e.g., `20`, `100`, `120`, `300`) |
 | `--wsp-explain-steps` | Require plain-English hypothesis explanation before each step |
+| `--wsp-no-header` | Disable the colorful Weight-Space Programming ASCII startup banner in the TUI |
 
 ### Slash Commands
 
@@ -156,6 +179,7 @@ pi -a --model google/gemini-3.1-pro-preview:xhigh
 - `/wsp-exp <1..8>`: Switch to an Experiment 1–8 configuration mid-session.
 - `/wsp-apply-edits <checkpoint> [output.npz]`: Parse the last ```` ```edits ```` block from the assistant's reply (in `tool-free` mode) and apply it to `<checkpoint>`, producing `<output.npz>` and a verified diff manifest.
 - `/wsp-reset`: Reset sandbox run counters, forward-pass counters, and session audit state.
+- `/wsp-header [on|off|toggle]`: Toggle between the colorful Weight-Space Programming ASCII startup banner and Pi's built-in header.
 
 ---
 

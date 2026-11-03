@@ -270,28 +270,39 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
             if Wo.shape[1] == d_model and Wo.shape[0] != d_model:
                 Wo = Wo.T
 
+            # Incorporate LayerNorm gain and mean-centering projection P = I - 11^T / d when present
+            P_center = np.eye(d_model, dtype=np.float32) - np.ones((d_model, d_model), dtype=np.float32) / float(d_model)
+            if "ln1_w" in lmap:
+                g1 = ckpt.get(lmap["ln1_w"]).astype(np.float32).reshape(1, -1)
+                ln_proj = np.diag(g1.ravel()) @ P_center
+            else:
+                ln_proj = P_center
+
             d_head = Wq.shape[0] // n_heads
             kv_group = max(1, n_heads // n_kv_heads)
+            scale = 1.0 / float(np.sqrt(max(1, d_head)))
 
             for h in range(n_heads):
                 kv_h = h // kv_group
-                q_h = Wq[h * d_head : (h + 1) * d_head, :]  # (d_head, d_model)
-                k_h = Wk[kv_h * d_head : (kv_h + 1) * d_head, :]  # (d_head, d_model)
-                v_h = Wv[kv_h * d_head : (kv_h + 1) * d_head, :]  # (d_head, d_model)
-                o_h = Wo[:, h * d_head : (h + 1) * d_head]  # (d_model, d_head)
+                q_h = Wq[h * d_head : (h + 1) * d_head, :] @ ln_proj  # (d_head, d_model)
+                k_h = Wk[kv_h * d_head : (kv_h + 1) * d_head, :] @ ln_proj  # (d_head, d_model)
+                v_h = Wv[kv_h * d_head : (kv_h + 1) * d_head, :] @ ln_proj  # (d_head, d_model)
+                o_h = P_center @ Wo[:, h * d_head : (h + 1) * d_head]  # (d_model, d_head)
 
-                # W_QK in residual space: x_q^T (q_h^T k_h) x_k
-                w_qk = q_h.T @ k_h  # (d_model, d_model)
-                # W_OV in residual space: o_h @ v_h maps x_src -> delta_x_dst
+                # Effective LayerNorm-centered QK bilinear form M = (1/sqrt(d_head)) q_e^T k_e
+                w_qk = (q_h.T @ k_h) * scale  # (d_model, d_model)
+                # Effective LayerNorm-centered OV circuit B = P o_h v_e
                 w_ov = o_h @ v_h  # (d_model, d_model)
 
                 qk_matrices[(l_idx, h)] = w_qk
                 ov_matrices[(l_idx, h)] = w_ov
 
-                s_qk = np.linalg.svd(q_h @ k_h.T, compute_uv=False)
+                s_qk = np.linalg.svd((q_h @ k_h.T) * scale, compute_uv=False)
                 s_ov = np.linalg.svd(v_h @ o_h, compute_uv=False)
                 ov_trace = float(np.trace(w_ov))
                 ov_fro = float(np.linalg.norm(w_ov)) + 1e-12
+                qk_trace = float(np.trace(w_qk))
+                qk_fro = float(np.linalg.norm(w_qk)) + 1e-12
                 sym_ov = 0.5 * (w_ov + w_ov.T)
                 antisym_ov = 0.5 * (w_ov - w_ov.T)
 
@@ -300,8 +311,9 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
                         "layer": l_idx,
                         "head": h,
                         "label": f"{l_idx}.{h}",
-                        "qk_fro_norm": round(float(np.linalg.norm(s_qk)), 4),
+                        "qk_fro_norm": round(qk_fro, 4),
                         "qk_spectral_norm": round(float(s_qk[0]) if s_qk.size else 0.0, 4),
+                        "qk_trace_over_fro": round(qk_trace / qk_fro, 4),
                         "ov_fro_norm": round(ov_fro, 4),
                         "ov_spectral_norm": round(float(s_ov[0]) if s_ov.size else 0.0, 4),
                         "ov_trace_over_fro": round(ov_trace / ov_fro, 4),
@@ -314,46 +326,70 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
         if op == "qk_ov_analysis":
             return {"num_layers": len(layers), "num_heads": n_heads, "heads": head_reports}
 
-        # Induction / copying head detection (Experiment 3 static composition method)
-        # Measure K-composition between earlier heads (l1, h1) and later heads (l2, h2):
-        # C_K((l1, h1) -> (l2, h2)) = || W_QK^(l2, h2) @ W_OV^(l1, h1) ||_F / (||W_QK^(l2, h2)||_F ||W_OV^(l1, h1)||_F)
+        # Induction / copying head detection (Experiment 3 static directional K-composition trace cosine)
+        # For earlier head (l1, h1) with OV circuit B_{l1,h1} and later head (l2, h2) with QK form M_{l2,h2}:
+        #   C_k = tr(M_{l2,h2} @ B_{l1,h1}) / (||M_{l2,h2}||_F ||B_{l1,h1}||_F)
+        #   C_q = tr(M_{l2,h2} @ B_{l1,h1}^T) / (||M_{l2,h2}||_F ||B_{l1,h1}||_F)
+        #   delta_k_vs_q = C_k - C_q
+        # Copying/induction heads exhibit strongly positive key-composition trace match (C_k >> 0 and C_k - C_q >> 0).
         k_compositions = []
-        head_induction_scores: Dict[str, float] = {}
-        for (l2, h2), w_qk2 in qk_matrices.items():
+        head_induction_scores: List[Dict[str, Any]] = []
+        for (l2, h2), m_qk2 in qk_matrices.items():
             if l2 == 0:
                 continue
-            qk_norm = float(np.linalg.norm(w_qk2)) + 1e-12
-            best_k_comp = 0.0
+            qk_norm = float(np.linalg.norm(m_qk2)) + 1e-12
+            best_ck = -1.0
+            best_delta = -1.0
             best_src = None
-            for (l1, h1), w_ov1 in ov_matrices.items():
+            pos_ck_sum = 0.0
+            for (l1, h1), b_ov1 in ov_matrices.items():
                 if l1 >= l2:
                     continue
-                ov_norm = float(np.linalg.norm(w_ov1)) + 1e-12
-                prod_norm = float(np.linalg.norm(w_qk2 @ w_ov1))
-                score = prod_norm / (qk_norm * ov_norm)
-                if score > best_k_comp:
-                    best_k_comp = score
+                ov_norm = float(np.linalg.norm(b_ov1)) + 1e-12
+                denom = qk_norm * ov_norm
+                # tr(A @ B) == sum(A * B.T); tr(A @ B.T) == sum(A * B)
+                c_k = float(np.sum(m_qk2 * b_ov1.T)) / denom
+                c_q = float(np.sum(m_qk2 * b_ov1)) / denom
+                delta_kq = c_k - c_q
+                frob_comp = float(np.linalg.norm(m_qk2 @ b_ov1)) / denom
+                if c_k > 0.03:
+                    pos_ck_sum += c_k
+                if c_k > best_ck:
+                    best_ck = c_k
+                    best_delta = delta_kq
                     best_src = f"{l1}.{h1}"
                 k_compositions.append(
                     {
                         "src_head": f"{l1}.{h1}",
                         "dst_head": f"{l2}.{h2}",
-                        "k_composition": round(score, 5),
+                        "c_k_trace_cos": round(c_k, 5),
+                        "c_q_trace_cos": round(c_q, 5),
+                        "delta_k_minus_q": round(delta_kq, 5),
+                        "frob_k_comp": round(frob_comp, 5),
                     }
                 )
-            # Combine K-composition with OV positive-eigenvalue copying signature
-            w_ov2 = ov_matrices[(l2, h2)]
-            ov_pos_trace = max(0.0, float(np.trace(w_ov2)) / (float(np.linalg.norm(w_ov2)) + 1e-12))
-            combined = best_k_comp * (1.0 + 0.5 * ov_pos_trace)
-            head_induction_scores[f"{l2}.{h2}"] = round(combined, 5)
+            b_ov2 = ov_matrices[(l2, h2)]
+            ov2_norm = float(np.linalg.norm(b_ov2)) + 1e-12
+            ov2_trace_cos = float(np.trace(b_ov2)) / ov2_norm
+            # Score emphasizes directional key-composition trace match (C_k and C_k - C_q)
+            induction_score = 0.65 * max(0.0, best_ck) + 0.35 * max(0.0, best_delta)
+            head_induction_scores.append(
+                {
+                    "head": f"{l2}.{h2}",
+                    "score": round(induction_score, 5),
+                    "best_prev_token_src": best_src,
+                    "max_c_k_trace_cos": round(best_ck, 5),
+                    "max_delta_k_minus_q": round(best_delta, 5),
+                    "positive_c_k_sum": round(pos_ck_sum, 5),
+                    "self_ov_trace_cos": round(ov2_trace_cos, 5),
+                }
+            )
 
-        k_compositions.sort(key=lambda x: -x["k_composition"])
-        ranked_heads = sorted(head_induction_scores.items(), key=lambda kv: -kv[1])
+        k_compositions.sort(key=lambda x: -x["c_k_trace_cos"])
+        head_induction_scores.sort(key=lambda x: -x["score"])
         return {
-            "method": "Elhage et al. / Experiment 3 static K-composition & OV trace analysis",
-            "ranked_candidate_copying_heads": [
-                {"head": k, "score": v} for k, v in ranked_heads[:12]
-            ],
+            "method": "LayerNorm-centered directional K-composition vs Q-composition trace cosine (C_k = tr(M_dst @ B_src) / (||M||_F ||B||_F))",
+            "ranked_candidate_copying_heads": head_induction_scores[:12],
             "top_k_compositions": k_compositions[:20],
             "all_heads": head_reports,
         }
@@ -405,8 +441,10 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
         return {"mlp_layers": mlp_reports, "cross_layer_u0_alignments": cross_alignments[:20]}
 
     if op == "subspace_rank":
-        # Experiment 3 Romaji vs English/Python check: effective rank of final block output matrices
+        # Experiment 3 Romaji vs English/Python check: effective rank of block output matrices
+        # and final-MLP input-regressed output singular value gap (alphabet bottleneck detector).
         reports = []
+        regressed_mlp_gaps = []
         for l_idx, lmap in layers.items():
             for role in ("W_o", "W_proj"):
                 if role not in lmap:
@@ -426,7 +464,38 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
                         "sv_ratio_s25_s0": round(float(s[min(25, len(s) - 1)] / (s[0] + 1e-12)), 5),
                     }
                 )
-        return {"subspace_rank": reports}
+            if "W_fc" in lmap and "W_proj" in lmap:
+                W_fc = ckpt.get(lmap["W_fc"]).astype(np.float64)
+                W_proj = ckpt.get(lmap["W_proj"]).astype(np.float64)
+                d_model = min(W_fc.shape)
+                if W_fc.shape[1] != d_model:
+                    W_fc = W_fc.T
+                if W_proj.shape[0] != d_model:
+                    W_proj = W_proj.T
+                P_c = np.eye(d_model, dtype=np.float64) - np.ones((d_model, d_model), dtype=np.float64) / float(d_model)
+                if "ln2_w" in lmap:
+                    g2 = ckpt.get(lmap["ln2_w"]).astype(np.float64).reshape(1, -1)
+                    F_in = (W_fc * g2) @ P_c
+                else:
+                    F_in = W_fc @ P_c
+                O_out = P_c @ W_proj
+                U_in, _, _ = np.linalg.svd(F_in, full_matrices=False)
+                R_out = O_out - (O_out @ U_in) @ U_in.T
+                sr = np.linalg.svd(R_out, compute_uv=False)
+                top_gaps = []
+                for idx in range(15, min(50, len(sr) - 1)):
+                    ratio = float(sr[idx] / (sr[idx + 1] + 1e-12))
+                    top_gaps.append({"rank_1based": idx + 1, "sv": round(float(sr[idx]), 4), "ratio_to_next": round(ratio, 4)})
+                top_gaps.sort(key=lambda x: -x["ratio_to_next"])
+                regressed_mlp_gaps.append(
+                    {
+                        "layer": l_idx,
+                        "top_singular_value_gaps_rank_16_to_50": top_gaps[:6],
+                        "energy_top24_fraction": round(float(np.sum(sr[:24] ** 2) / (np.sum(sr**2) + 1e-12)), 4),
+                        "energy_top30_fraction": round(float(np.sum(sr[:30] ** 2) / (np.sum(sr**2) + 1e-12)), 4),
+                    }
+                )
+        return {"subspace_rank": reports, "mlp_input_regressed_alphabet_bottleneck": regressed_mlp_gaps}
 
     raise ValueError(f"Unknown circuit_probe operation: {op!r}")
 
@@ -515,6 +584,35 @@ def _parse_slice_tuple(spec: str):
     return items[0] if len(items) == 1 else tuple(items)
 
 
+def _resolve_dsl_tensor_name(tname: str, tensors: Dict[str, np.ndarray]) -> Optional[str]:
+    if tname in tensors:
+        return tname
+    alt_u = tname.replace(".", "_")
+    if alt_u in tensors:
+        return alt_u
+    alt_d = tname.replace("_", ".")
+    if alt_d in tensors:
+        return alt_d
+    # Flax Actor-Critic RNN short aliases used in Experiment 4 (exp4_fix_car)
+    flax_map: Dict[str, str] = {
+        "embed.W": "params/Dense_0/kernel",
+        "embed.b": "params/Dense_0/bias",
+        "actor_head.W": "params/GeneralActorCriticRNN_0/Dense_0/kernel",
+        "actor_head.b": "params/GeneralActorCriticRNN_0/Dense_0/bias",
+        "critic_head.W": "params/GeneralActorCriticRNN_0/Dense_1/kernel",
+        "critic_head.b": "params/GeneralActorCriticRNN_0/Dense_1/bias",
+    }
+    for k in range(5):
+        flax_map[f"actor{k}.W"] = f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k}/Dense_0/kernel"
+        flax_map[f"actor{k}.b"] = f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k}/Dense_0/bias"
+        flax_map[f"critic{k}.W"] = f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k + 5}/Dense_0/kernel"
+        flax_map[f"critic{k}.b"] = f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k + 5}/Dense_0/bias"
+    mapped = flax_map.get(tname)
+    if mapped and mapped in tensors:
+        return mapped
+    return None
+
+
 def apply_edits_dsl(tensors: Dict[str, np.ndarray], dsl_text: str) -> Dict[str, Any]:
     """Parse and apply the `edits` block DSL from Experiments 4 and 5."""
     # Extract last ```edits ... ``` block if present, otherwise parse raw text
@@ -551,9 +649,10 @@ def apply_edits_dsl(tensors: Dict[str, np.ndarray], dsl_text: str) -> Dict[str, 
         if not m:
             errors.append({"statement": stmt, "error": "Syntax did not match TENSOR[slice] op value"})
             continue
-        tname, slice_str, op, val_str = m.group(1), m.group(2), m.group(3), m.group(4)
-        if tname not in tensors:
-            errors.append({"statement": stmt, "error": f"Unknown tensor {tname!r}"})
+        raw_tname, slice_str, op, val_str = m.group(1), m.group(2), m.group(3), m.group(4)
+        tname = _resolve_dsl_tensor_name(raw_tname, tensors)
+        if tname is None:
+            errors.append({"statement": stmt, "error": f"Unknown tensor {raw_tname!r}"})
             continue
         try:
             idx = _parse_slice_tuple(slice_str)
@@ -665,7 +764,6 @@ def build_edit_manifest(
 
 
 def cmd_edit(args: Dict[str, Any]) -> Dict[str, Any]:
-    ckpt = P.Checkpoint(args["checkpoint"])
     mode = args.get("mode", "dsl")
     out_path = args.get("output_path") or os.path.join(P.WORK, "edited_network.npz")
     manifest_dir = args.get("manifest_dir") or os.path.join(P.WORK, "edit")
@@ -674,12 +772,22 @@ def cmd_edit(args: Dict[str, Any]) -> Dict[str, Any]:
     work_tensors: Dict[str, np.ndarray] = {}
 
     if mode == "dsl":
-        # Load all tensors in checkpoint (for small/medium networks or matched tensors)
-        for k in ckpt.keys():
-            arr = ckpt.get(k)
-            base_tensors[k] = arr.copy()
-            work_tensors[k] = arr.copy()
-        dsl_report = apply_edits_dsl(work_tensors, args["dsl"])
+        init_shapes = args.get("init_shapes")
+        if init_shapes:
+            for k, shp in init_shapes.items():
+                zeros = np.zeros(tuple(shp), dtype=np.float32)
+                base_tensors[k] = zeros.copy()
+                work_tensors[k] = zeros.copy()
+        elif args.get("checkpoint"):
+            ckpt = P.Checkpoint(args["checkpoint"])
+            for k in ckpt.keys():
+                arr = ckpt.get(k)
+                base_tensors[k] = arr.copy()
+                work_tensors[k] = arr.copy()
+        else:
+            raise ValueError("mode='dsl' requires either 'checkpoint' or 'init_shapes'")
+        dsl_text = args.get("dsl") or args.get("edits_dsl") or ""
+        dsl_report = apply_edits_dsl(work_tensors, dsl_text)
         edited_subset = {k: work_tensors[k] for k in dsl_report["tensors_touched"]}
         manifest = build_edit_manifest(base_tensors, edited_subset, manifest_dir)
         os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
@@ -687,9 +795,13 @@ def cmd_edit(args: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "mode": "dsl",
             "output_path": out_path,
+            "applied_count": dsl_report["statements_applied"],
+            "total_changed_entries": manifest["changed_entries_total"],
             "dsl_report": dsl_report,
             "manifest": manifest,
         }
+
+    ckpt = P.Checkpoint(args["checkpoint"])
 
     tensor_name = args["tensor_name"]
     if not P.ALLOW_PROTECTED_EDITS and not args.get("allow_protected", False):
@@ -812,6 +924,13 @@ try:
     torch.set_grad_enabled(False)
 except ImportError:
     pass
+if MODEL_PATH and os.path.exists(MODEL_PATH):
+    try:
+        _default_ckpt = Checkpoint(MODEL_PATH)
+        if len(_default_ckpt.keys()) <= 64:
+            W = {{k: _default_ckpt.get(k) for k in _default_ckpt.keys()}}
+    except Exception:
+        pass
 """ + "\n" + code
 
     with tempfile.NamedTemporaryFile("w", suffix=".py", dir=work_dir, delete=False, encoding="utf-8") as tf:

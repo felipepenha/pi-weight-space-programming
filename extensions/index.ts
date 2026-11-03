@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { WspAuditLogger } from "./audit.ts";
+import { WspHeaderComponent } from "./header.ts";
 import type { ThinkingLevel, WspModeName, WspPresetsFile, WspSessionState } from "./types.ts";
 
 const EXTENSION_DIR = dirname(fileURLToPath(import.meta.url));
@@ -220,6 +221,32 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 		type: "boolean",
 		default: false,
 	});
+	pi.registerFlag("wsp-no-header", {
+		description: "Disable the Weight-Space Programming colorful ASCII startup header",
+		type: "boolean",
+		default: false,
+	});
+
+	let customHeaderEnabled = true;
+
+	function applyCustomHeader(ctx: ExtensionContext, enabled: boolean) {
+		customHeaderEnabled = enabled;
+		if (!ctx.hasUI) return;
+		if (enabled) {
+			ctx.ui.setHeader(
+				(_tui, theme) =>
+					new WspHeaderComponent(theme, () => ({
+						state,
+						modelLabel: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "default",
+						thinkingLevel: pi.getThinkingLevel(),
+						cwd: ctx.cwd,
+						activeTools: pi.getActiveTools(),
+					})),
+			);
+		} else {
+			ctx.ui.setHeader(undefined);
+		}
+	}
 
 	// 3. Register Weight-Space Programming Tools
 	pi.registerTool({
@@ -682,6 +709,9 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 			state.explainEveryStep = true;
 		}
 
+		const noHeaderFlag = pi.getFlag("wsp-no-header");
+		applyCustomHeader(ctx, noHeaderFlag !== true);
+
 		updateStatusBar(ctx);
 	});
 
@@ -843,6 +873,29 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 			state.editedTensors = [];
 			updateStatusBar(ctx);
 			ctx.ui.notify("WSP counters and state reset.", "info");
+		},
+	});
+
+	pi.registerCommand("wsp-header", {
+		description: "Toggle the colorful Weight-Space Programming ASCII startup header: /wsp-header [on|off|toggle]",
+		handler: async (args, ctx) => {
+			const arg = (args || "").trim().toLowerCase();
+			let nextState = !customHeaderEnabled;
+			if (arg === "on" || arg === "true" || arg === "1") {
+				nextState = true;
+			} else if (arg === "off" || arg === "false" || arg === "0" || arg === "builtin") {
+				nextState = false;
+			} else if (arg && arg !== "toggle") {
+				ctx.ui.notify("Usage: /wsp-header [on|off|toggle]", "warning");
+				return;
+			}
+			applyCustomHeader(ctx, nextState);
+			ctx.ui.notify(
+				nextState
+					? "Weight-Space Programming ASCII header enabled."
+					: "Restored built-in Pi header.",
+				"info",
+			);
 		},
 	});
 }
