@@ -137,6 +137,32 @@ pi --no-builtin-tools -e /path/to/pi-weight-space-programming/extensions/index.t
 - `--no-builtin-tools` (`-nbt`) disables Pi's default file/shell coding tools (`bash`, `edit`, `write`, `read`) while keeping the extension's `wsp_*` tools active.
 - All bundled skills (`/skill:weight-space-reading`, `/skill:weight-space-writing`, `/skill:weight-space-surgery`) and prompt templates (`/wsp-read-weights`, `/wsp-write-scratch`, `/wsp-surgical-edit`, `/wsp-compare-sycophancy`) are discovered automatically.
 
+### Where to Place Your Model / Checkpoint Files
+
+You can place your target model files (`.safetensors`, `.npz`, `.npy`, or a Hugging Face model directory containing `model.safetensors`, `config.json`, and `tokenizer.json`) **anywhere inside your workspace** (e.g. `my-wsp-workspace/models/`) or at any path on disk. The extension resolves model checkpoints in three ways:
+
+1. **Pass `--wsp-model-path` at startup (Recommended for single-model sessions)**:
+   ```text
+   my-wsp-workspace/
+   ├── .pi/
+   │   └── settings.json
+   └── models/
+       └── my_network.npz        # or a folder with model.safetensors + tokenizer.json
+   ```
+   ```bash
+   cd my-wsp-workspace
+   pi -a --wsp-model-path ./models/my_network.npz
+   ```
+   When `--wsp-model-path` is set:
+   - All tools (`wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_edit_weights`, `wsp_forward_pass`) **automatically default** to that checkpoint without needing the path repeated in every prompt.
+   - Inside `wsp_python_sandbox`, `MODEL_PATH` is automatically bound to that path (and for `.npz` checkpoints with $\le 64$ tensors, `W` is pre-loaded as a dictionary of NumPy arrays).
+
+2. **Reference the path directly in your chat prompt (No CLI flag needed)**:
+   If you start `pi` without `--wsp-model-path`, simply mention the relative or absolute path in chat (e.g., *"Inspect `./models/my_network.npz` and check its attention heads"* or *"Compare `./models/base.safetensors` and `./models/finetuned.safetensors`"*). Every `wsp_*` tool accepts a `checkpoint` argument (`checkpoint_a` / `checkpoint_b` for comparisons) and resolves relative paths against your current working directory.
+
+3. **Writing weights from scratch (No existing model file needed)**:
+   When compiling a network from scratch (such as Experiments 5 and 6), no input model file is required—`wsp_edit_weights` (`init_shapes`) and `wsp_python_sandbox` (`save_weight(...)`) write newly synthesized `.npz` / `.npy` files directly into `<workspace>/.wsp-work/` (or the directory passed to `--wsp-work-dir`).
+
 ### Running Specific Paper Experiments (Experiments 1–8)
 
 Whether loaded via `.pi/settings.json` (Option 1) or `-e` (Option 2), use `--wsp-exp <1..8>` to configure the exact harness mode, thinking level (`high`, `xhigh`, `max`), sandbox run limit, forward-pass budget, and `EXPLAIN EVERY STEP` enforcement from the paper:
