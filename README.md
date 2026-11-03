@@ -29,7 +29,7 @@ Inspired by and adapted from the paper and experiment audit repository:
 <tr><td><b>Direct Weight Compilation</b></td><td>Compile symbolic algorithms, coordinate trackers, boolean logic gates, and multi-step board propagation directly into neural network weight matrices from scratch without training.</td></tr>
 <tr><td><b>Surgical Model Editing</b></td><td>Apply gradient-free weight edits via the <code>edits</code> DSL, directional subspace projection $W' = W - \alpha u(u^\top W)$, neuron/head ablation, or rank-one updates with verified <code>bfloat16</code> diff manifests.</td></tr>
 <tr><td><b>Anti-Training Python Sandbox</b></td><td>Isolated CPU-only, network-disabled Python sandbox preloaded with <code>Checkpoint</code>, <code>Tokenizer</code>, <code>load()</code>, and <code>save_edit()</code>, with AST guards blocking <code>.backward()</code>, <code>torch.optim</code>, and regression fitting.</td></tr>
-<tr><td><b>Hugging Face Model Downloads</b></td><td>Strict, domain-restricted exception to download checkpoints (<code>.safetensors</code>, configs, tokenizers) directly from Hugging Face Hub (<code>huggingface.co</code>) with path-traversal guards and automatic active-model binding.</td></tr>
+<tr><td><img src="assets/huggingface.svg" alt="Hugging Face" width="18" height="18" valign="middle"> <b>Hugging Face Model Downloads</b></td><td>Strict, domain-restricted exception to download checkpoints (<code>.safetensors</code>, configs, tokenizers) directly from Hugging Face Hub (<code>huggingface.co</code>) with path-traversal guards and automatic active-model binding.</td></tr>
 <tr><td><b>Paper Experiments 1–8 Presets</b></td><td>One-flag replication (<code>--wsp-exp 1..8</code>) configuring exact tool modes, reasoning effort (<code>high</code>, <code>xhigh</code>, <code>max</code>), sandbox run limits, forward-pass budgets, and <code>lm_understand-logs</code> audit traces.</td></tr>
 </table>
 
@@ -139,7 +139,7 @@ You can also switch paper presets mid-session inside the chat UI using `/wsp-exp
 
 ---
 
-## Hugging Face Model Downloads & Strict Network Exception Policy
+## <img src="assets/huggingface.svg" alt="Hugging Face" width="28" height="28" valign="middle"> Hugging Face Model Downloads & Strict Network Exception Policy
 
 This repository is built upon a **strict internet connection prohibition** to enforce pure mechanistic reasoning and prevent contamination from external data or automated training:
 - The Python sandbox (`wsp_python_sandbox`) runs in an offline CPU environment with `http_proxy: http://127.0.0.1:0` and `NO_PROXY: "*"`.
