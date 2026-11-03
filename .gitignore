@@ -94,9 +94,8 @@ ipython_config.py
 # Pipfile.lock
 
 # uv
-#   Uncomment uv.lock if you want to track exact locked dependencies in git;
-#   leave ignored for library / extension compatibility across diverse environments.
-uv.lock
+#   Include uv.lock in version control for deterministic dependency locking.
+# uv.lock
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
