@@ -198,17 +198,17 @@ export function buildWspHeaderLines(
 	if (expanded) {
 		rightLines.push(
 			c(
-				`commands: /wsp · /wsp-mode · /wsp-exp · /wsp-apply-edits · /wsp-reset · /wsp-header`,
+				`commands: /wsp · /wsp-mode · /wsp-exp · /wsp-hf-download · /wsp-apply-edits · /wsp-reset · /wsp-header`,
 				"accentBright",
 			),
 		);
 	}
 
-	// Title in top border: ╭─── Pi Weight-Space Programming v0.1.0 · ∇_θ L = 0 (No Backprop) ───╮
-	const titlePlain = " Pi Weight-Space Programming v0.1.0 · ∇_θ L = 0 (No Backprop) ";
+	// Title in top border: ╭─── Pi Weight-Space Programming v0.0.1 · ∇_θ L = 0 (No Backprop) ───╮
+	const titlePlain = " Pi Weight-Space Programming v0.0.1 · ∇_θ L = 0 (No Backprop) ";
 	const titleStyled =
 		" " +
-		c("Pi Weight-Space Programming v0.1.0", "title", true) +
+		c("Pi Weight-Space Programming v0.0.1", "title", true) +
 		c(" · ", "muted") +
 		c("∇_θ L = 0 (No Backprop)", "accentBright", true) +
 		" ";
