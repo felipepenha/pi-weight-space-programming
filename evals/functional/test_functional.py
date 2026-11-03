@@ -2,6 +2,10 @@
 """
 Functional & deterministic paper parity test suite for pi-weight-space-programming.
 
+Works out-of-the-box on a blank slate: automatically downloads and caches required
+paper checkpoints and reference artifacts from `RikiyaT/lm_understand-logs` into
+`evals/.cache/paper_evals` (or `$WSP_EVAL_DATA_DIR`) when not already present.
+
 Verifies:
 1. All 5 wsp_engine.py commands (`inspect`, `circuit_probe`, `compare`, `edit`, `sandbox`).
 2. Static gradient/training guard in `sandbox` (blocks `.backward()`, `torch.optim`, etc.).
@@ -18,10 +22,58 @@ import os
 import pathlib
 import subprocess
 import sys
+import urllib.request
 import numpy as np
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 ENGINE_PATH = REPO_ROOT / "harness" / "wsp_engine.py"
+DEFAULT_CACHE_DIR = REPO_ROOT / "evals" / ".cache" / "paper_evals"
+
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/RikiyaT/lm_understand-logs/main"
+
+REQUIRED_ARTIFACTS = {
+    # Experiment 1 (Which Game?)
+    "exp1/breakout_prompt.txt": "exp1_which_game/runs/breakout/prompt.txt",
+    "exp1/pong_prompt.txt": "exp1_which_game/runs/pong/prompt.txt",
+    "exp1/pacman_prompt.txt": "exp1_which_game/runs/pacman/prompt.txt",
+    "exp1/freeway_prompt.txt": "exp1_which_game/runs/freeway/prompt.txt",
+    "exp1/answer_key.json": "exp1_which_game/eval/answer_key.json",
+    # Experiment 2 (Diffusion Shape)
+    "exp2/circle_prompt.txt": "exp2_diffusion/runs/circle/prompt.txt",
+    "exp2/square_prompt.txt": "exp2_diffusion/runs/square/prompt.txt",
+    "exp2/triangle_prompt.txt": "exp2_diffusion/runs/triangle/prompt.txt",
+    # Experiment 3 (Language & Copying Heads from Middle Transformer Blocks)
+    "exp3/python_blocks.npz": "exp3_language/networks/python/blocks.npz",
+    "exp3/romaji_blocks.npz": "exp3_language/networks/romaji/blocks.npz",
+    "exp3/english_blocks.npz": "exp3_language/networks/english/blocks.npz",
+    "exp3/heads.json": "exp3_language/eval/heads.json",
+    "exp3/message.txt": "exp3_language/runs/python_r0/message.txt",
+    # Experiment 4 (Fix Failing Car via Surgical Weight Edits)
+    "exp4/ppo_final_seed0.npz": "exp4_fix_car/networks/ppo_final_seed0.npz",
+    "exp4/edited_actor.npz": "exp4_fix_car/networks/edited_actor.npz",
+    "exp4/answer.md": "exp4_fix_car/runs/oneshot_repair/reply/answer.md",
+    "exp4/oneshot_result.json": "exp4_fix_car/eval/oneshot_result.json",
+    # Experiment 5 (Write Breakout Policy from Scratch)
+    "exp5/breakout_hand.npz": "exp5_write_from_scratch/networks/breakout/hand.npz",
+    "exp5/breakout_answer.md": "exp5_write_from_scratch/runs/breakout/reply/answer.md",
+    "exp5/breakout_apply.json": "exp5_write_from_scratch/runs/breakout/apply.json",
+}
+
+
+def ensure_eval_artifacts(cache_dir: pathlib.Path, subset_prefixes: tuple = ("exp3/", "exp4/", "exp5/")) -> None:
+    """Download any missing paper evaluation files from RikiyaT/lm_understand-logs."""
+    for rel_dst, remote_rel in REQUIRED_ARTIFACTS.items():
+        if subset_prefixes and not any(rel_dst.startswith(p) for p in subset_prefixes):
+            continue
+        dst = cache_dir / rel_dst
+        if dst.exists() and dst.stat().st_size > 32:
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        url = f"{GITHUB_RAW_BASE}/{remote_rel}"
+        print(f"[download] Fetching {rel_dst} from {url} ...", file=sys.stderr)
+        req = urllib.request.Request(url, headers={"User-Agent": "pi-weight-space-programming-evals/0.1"})
+        with urllib.request.urlopen(req, timeout=120) as resp, open(dst, "wb") as out_f:
+            out_f.write(resp.read())
 
 
 def run_engine(cmd: str, payload: dict) -> dict:
@@ -35,12 +87,8 @@ def run_engine(cmd: str, payload: dict) -> dict:
 
 
 def main() -> None:
-    eval_data_dir = pathlib.Path(
-        os.environ.get(
-            "WSP_EVAL_DATA_DIR",
-            "/Users/fcpenha/.gemini/antigravity/brain/81f92be7-f8a1-431a-8148-ae1fac4b1a07/scratch/paper_evals",
-        )
-    )
+    eval_data_dir = pathlib.Path(os.environ.get("WSP_EVAL_DATA_DIR", str(DEFAULT_CACHE_DIR)))
+    ensure_eval_artifacts(eval_data_dir, subset_prefixes=("exp3/", "exp4/", "exp5/"))
     results = {"tests": {}, "all_passed": False}
 
     # 1. Inspect command
@@ -160,7 +208,11 @@ def main() -> None:
         )
         top_heads = [h["head"] for h in ind["ranked_candidate_copying_heads"][:3]]
         model_heads = heads_ref[f"{lang}_L4_H6_d384_s0"]
-        gt_heads = [f"{k[1]}.{k[3]}" for k, v in model_heads.items() if isinstance(v, dict) and v.get("induct", 0.0) >= 0.2]
+        gt_heads = [
+            f"{k[1]}.{k[3]}"
+            for k, v in model_heads.items()
+            if isinstance(v, dict) and v.get("induct", 0.0) >= 0.2
+        ]
         assert all(g in top_heads for g in gt_heads)
         l3_gap = sub["mlp_input_regressed_alphabet_bottleneck"][-1]
         exp3_probe_summary[lang] = {

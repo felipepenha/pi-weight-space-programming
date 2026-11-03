@@ -222,3 +222,4 @@ __marimo__/
 # Weight-Space Programming runtime work & audit directories
 .wsp-work/
 node_modules/
+evals/.cache/

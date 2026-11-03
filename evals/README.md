@@ -12,10 +12,11 @@ This directory documents the functional test suite and paper benchmark evaluatio
 ```text
 evals/
 ├── README.md                                 # This summary report
+├── run_paper_evals.py                        # Turnkey blank-slate downloader, Pi runner & scorer for Exp 1, 2, 3
 ├── functional/
 │   ├── test_pi_extension.mjs                 # Programmatic Pi extension, skill, prompt & hook loader test
 │   ├── extension_loader_results.json         # Verified output of test_pi_extension.mjs
-│   ├── test_functional.py                    # Engine, static circuit probe, no-grad guard & Exp 3/4/5 parity test
+│   ├── test_functional.py                    # Blank-slate engine, circuit probe, no-grad guard & Exp 3/4/5 parity test
 │   └── functional_results.json               # Verified output of test_functional.py
 └── runs/                                     # Preserved audit logs from live Pi CLI evaluation runs
     ├── exp1_breakout/                        # Experiment 1: Breakout (tool-free weight reading)
@@ -28,6 +29,28 @@ evals/
     ├── exp3_python/                          # Experiment 3: Python middle transformer blocks (static probing)
     ├── exp3_romaji/                          # Experiment 3: Romaji middle transformer blocks (static probing)
     └── exp3_english/                         # Experiment 3: English middle transformer blocks (static probing)
+```
+
+---
+
+## Running on a Blank Slate (Automatic Checkpoint & Prompt Caching)
+
+All test and evaluation scripts in `evals/` work out-of-the-box on a fresh clone with **zero manual dataset setup**:
+- Whenever [`evals/functional/test_functional.py`](./functional/test_functional.py) or [`evals/run_paper_evals.py`](./run_paper_evals.py) is run, any missing paper checkpoints (`.npz`), prompts (`prompt.txt`, `message.txt`), or ground-truth keys (`answer_key.json`, `heads.json`, `oneshot_result.json`) are **automatically downloaded** from [`RikiyaT/lm_understand-logs`](https://github.com/RikiyaT/lm_understand-logs) and cached locally in `evals/.cache/paper_evals/` (gitignored).
+- [`evals/functional/test_pi_extension.mjs`](./functional/test_pi_extension.mjs) automatically locates your local `pi` installation (`~/.pi/agent/install`, `which pi`, or `npm root -g`).
+
+```bash
+# 1. Verify Pi extension loading, tools, commands, flags, skills & prompt discovery
+node evals/functional/test_pi_extension.mjs
+
+# 2. Run engine functional tests & deterministic Exp 3/4/5 parity checks (auto-downloads .npz files on first run)
+python3 evals/functional/test_functional.py
+
+# 3. Score the preserved paper evaluation runs in evals/runs/ (or re-run live with Pi)
+python3 evals/run_paper_evals.py --score-only
+# To re-run live evaluations with Pi from scratch:
+# python3 evals/run_paper_evals.py --exp 1 3
+# python3 evals/run_paper_evals.py --exp 2 --model google/gemini-4-argon
 ```
 
 ---
