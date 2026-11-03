@@ -56,151 +56,38 @@ This Pi harness extension supports **both** that strict zero-tool replication mo
 
 ---
 
-## Running Without Global Installation
+## Quick Start
 
-It is **not** recommended to install this extension globally in `~/.pi/agent/settings.json`. Because this repository is configured as a full Pi package (with a `pi` manifest in `package.json`), you can install or configure it per-workspace via Git or a local directory, or load it per-invocation via CLI flags.
+### 1. Install in Your Workspace
 
-### Option 1: Configure as a Project-Local Package via Git (Recommended)
-
-To configure the package for a specific workspace without installing it globally, you have two quick options:
-
-#### A. Install via CLI (Fastest)
-
-Run `pi install -l` inside your workspace directory:
+Run `pi install -l` inside your workspace directory (installs locally into `.pi/` without modifying your global Pi settings):
 
 ```bash
 mkdir my-wsp-workspace && cd my-wsp-workspace
 pi install -l git:github.com/felipepenha/pi-weight-space-programming -a
 ```
 
-This clones the repository into `my-wsp-workspace/.pi/git/` and configures `.pi/settings.json` automatically.
+*(To pull future updates, run `pi update -a`.)*
 
-#### B. Manual `.pi/settings.json`
-
-Create `.pi/settings.json` inside your working directory:
-
-```text
-my-wsp-workspace/
-└── .pi/
-    └── settings.json
-```
-
-Point `"packages"` to the Git repository:
-
-```json
-{
-  "$schema": "https://pi.dev/schemas/settings.schema.json",
-  "defaultTools": [],
-  "defaultThinkingLevel": "high",
-  "packages": [
-    "git:github.com/felipepenha/pi-weight-space-programming"
-  ]
-}
-```
-
-*(Alternatively, HTTPS `https://github.com/felipepenha/pi-weight-space-programming.git` or SSH `git@github.com:felipepenha/pi-weight-space-programming.git` are also supported. For local development on cloned code, you can instead point to a local directory via `"packages": ["/path/to/pi-weight-space-programming"]` or `"extensions": ["/path/to/pi-weight-space-programming/extensions/index.ts"]`.)*
-
-- Setting `"defaultTools": []` disables Pi's built-in file/shell tools (`read`, `bash`, `edit`, `write`) by default in that workspace while keeping all `wsp_*` extension tools active.
-- Bundled skills (`/skill:weight-space-reading`, etc.) and prompt templates are discovered automatically from the package manifest.
-- Run `pi` from inside `my-wsp-workspace/` (pass `--approve` / `-a` to trust project-local settings non-interactively):
+### 2. Launch Pi
 
 ```bash
-cd my-wsp-workspace
 pi -a
 ```
 
-### Updating the Package
+*(Or, if working directly inside a local clone of this repository: `pi -e ./extensions/index.ts`)*
 
-When this repository is configured as a Git package in your workspace, you can easily pull the latest updates, tool fixes, and skills:
+### 3. Ask in Natural Language
 
-```bash
-# Update all project-local packages
-pi update -a --extensions
+Place any model checkpoint (`.safetensors`, `.npz`, `.npy`, or raw weight text files) in your workspace and ask Pi directly in chat:
 
-# Or update this specific package
-pi update -a git:github.com/felipepenha/pi-weight-space-programming
+- **Read raw weights**: *"Which game was this neural network trained on? @path/to/weights.txt"*
+- **Inspect architecture & circuits**: *"Inspect `./model.npz` without running forward passes—what are its layers, singular value spectra, and copying attention heads doing?"*
+- **Compare checkpoints**: *"Compare `./base.safetensors` and `./finetuned.safetensors` in weight space and identify which layers changed the most."*
+- **Surgical weight editing**: *"Surgically edit `./policy.npz` to remove its steering drift without fine-tuning."*
+- **Compile weights from scratch**: *"Compile a neural network from scratch that implements an 8×8 Breakout policy and save the `.npz` checkpoint."*
 
-# Update both pi itself and all packages
-pi update --all
-```
-
-Pi fetches the latest git commits, updates cached files, and reloads the extension, skills, and prompt templates on your next session.
-
-### Option 2: Load Directly via CLI (`--extension` / `-e`)
-
-If you have cloned the repository locally and want to load the extension for a single run without any workspace configuration files:
-
-```bash
-pi --no-builtin-tools -e /path/to/pi-weight-space-programming/extensions/index.ts
-```
-
-- `--no-builtin-tools` (`-nbt`) disables Pi's default file/shell coding tools (`bash`, `edit`, `write`, `read`) while keeping the extension's `wsp_*` tools active.
-- All bundled skills (`/skill:weight-space-reading`, `/skill:weight-space-writing`, `/skill:weight-space-surgery`) and prompt templates (`/wsp-read-weights`, `/wsp-write-scratch`, `/wsp-surgical-edit`, `/wsp-compare-sycophancy`) are discovered automatically.
-
-### Where to Place Your Model / Checkpoint Files
-
-You can place your target model files (`.safetensors`, `.npz`, `.npy`, or a Hugging Face model directory containing `model.safetensors`, `config.json`, and `tokenizer.json`) **anywhere inside your workspace** (e.g. `my-wsp-workspace/models/`) or at any path on disk. The extension resolves model checkpoints in three ways:
-
-1. **Pass `--wsp-model-path` at startup (Recommended for single-model sessions)**:
-   ```text
-   my-wsp-workspace/
-   ├── .pi/
-   │   └── settings.json
-   └── models/
-       └── my_network.npz        # or a folder with model.safetensors + tokenizer.json
-   ```
-   ```bash
-   cd my-wsp-workspace
-   pi -a --wsp-model-path ./models/my_network.npz
-   ```
-   When `--wsp-model-path` is set:
-   - All tools (`wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_edit_weights`, `wsp_forward_pass`) **automatically default** to that checkpoint without needing the path repeated in every prompt.
-   - Inside `wsp_python_sandbox`, `MODEL_PATH` is automatically bound to that path (and for `.npz` checkpoints with $\le 64$ tensors, `W` is pre-loaded as a dictionary of NumPy arrays).
-
-2. **Reference the path directly in your chat prompt (No CLI flag needed)**:
-   If you start `pi` without `--wsp-model-path`, simply mention the relative or absolute path in chat (e.g., *"Inspect `./models/my_network.npz` and check its attention heads"* or *"Compare `./models/base.safetensors` and `./models/finetuned.safetensors`"*). Every `wsp_*` tool accepts a `checkpoint` argument (`checkpoint_a` / `checkpoint_b` for comparisons) and resolves relative paths against your current working directory.
-
-3. **Writing weights from scratch (No existing model file needed)**:
-   When compiling a network from scratch (such as Experiments 5 and 6), no input model file is required—`wsp_edit_weights` (`init_shapes`) and `wsp_python_sandbox` (`save_weight(...)`) write newly synthesized `.npz` / `.npy` files directly into `<workspace>/.wsp-work/` (or the directory passed to `--wsp-work-dir`).
-
-### Running Specific Paper Experiments (Experiments 1–8)
-
-Whether loaded via `.pi/settings.json` (Option 1) or `-e` (Option 2), use `--wsp-exp <1..8>` to configure the exact harness mode, thinking level (`high`, `xhigh`, `max`), sandbox run limit, forward-pass budget, and `EXPLAIN EVERY STEP` enforcement from the paper:
-
-```bash
-# Experiment 1: Read raw policy weights in strict tool-free mode (effort: high)
-pi -a --wsp-exp 1 \
-  --wsp-log-dir ./logs/exp1_run \
-  -p @prompt.txt
-
-# Experiment 3: Identify language & copying heads from middle transformer blocks (effort: xhigh, 0 forward passes)
-pi -a --wsp-exp 3 \
-  --wsp-model-path ./networks/python/blocks.npz \
-  --wsp-log-dir ./logs/exp3_python
-
-# Experiment 7: Compare two checkpoints A and B for sycophancy (effort: xhigh, max 20 runs)
-pi -a --wsp-exp 7 \
-  --wsp-log-dir ./logs/exp7_pair1
-
-# Experiment 8: Surgical weight editing for math reasoning (effort: max, 50 forward passes, EXPLAIN EVERY STEP)
-pi -a --wsp-exp 8 \
-  --wsp-model-path ./base_model/model.safetensors \
-  --wsp-work-dir ./.wsp-work/p50 \
-  --wsp-log-dir ./logs/exp8_p50
-```
-
-### Model & Reasoning Effort Configuration
-
-The extension works with any model provider configured in Pi (`google`, `openai`, `anthropic`, etc.). It uses your configured default model automatically, or you can set `defaultProvider` / `defaultModel` in `<workspace>/.pi/settings.json` or pass `--model` per invocation:
-
-```bash
-# Use your default configured model with xhigh thinking effort
-pi -a --wsp-mode mech-interp --wsp-effort xhigh
-
-# Explicitly specify a model and thinking level via Pi's --model flag
-pi -a --model google/gemini-3.8-flash:high
-pi -a --model google/gemini-3.1-pro-preview:xhigh
-```
+You can also switch paper presets mid-session inside the chat UI using `/wsp-exp 1`..`8`, `/wsp-mode <mode>`, or check status with `/wsp`.
 
 ---
 
