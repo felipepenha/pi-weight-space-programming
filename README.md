@@ -35,28 +35,27 @@ Inspired by and adapted from the paper and experiment audit repository:
 
 ---
 
-## How This Differs from the Original Codex Setup
+## Requirements
 
-In [`RikiyaT/lm_understand-logs`](https://github.com/RikiyaT/lm_understand-logs), the model was run via `codex exec` with every built-in tool disabled (`harness/codex_config.toml`), relying on an external driver loop to parse markdown blocks (```` ```python ````, ```` ```edits ````, ```` ```forward ````, ```` ```attention ````).
+1. **[Pi Coding Agent (`pi`)](https://pi.dev)**:
+   Install the Pi CLI and configure your preferred LLM provider:
+   ```bash
+   # Install Pi (macOS / Linux)
+   curl -fsSL https://pi.dev/install.sh | sh
 
-This Pi harness extension supports **both** that strict zero-tool replication mode (`--wsp-mode tool-free`) **and** native, built-in Weight-Space Programming capabilities:
+   # Authenticate with a model provider (or export ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY)
+   pi auth
+   ```
+   *(See [pi.dev](https://pi.dev) for alternative installation methods such as `npm install -g @mariozechner/pi-coding-agent`.)*
 
-1. **Built-in Weight-Space Tools**:
-   - `wsp_inspect_weights`: Inspects `.safetensors` (`BF16`/`F16`/`F32`), `.npz`, `.npy`, or checkpoint directories directly—computing tensor summaries, singular value spectra (`svd_spectrum`), effective rank / participation ratio, rounded slices (`slice`), and ASCII-safe token embedding projections (`vocab_projection`) without running a forward pass.
-   - `wsp_circuit_probe`: Performs static weight-space mechanistic interpretability (`qk_ov_analysis`, static K-composition `induction_heads` detection as in Experiment 3, `mlp_directions` dominant write-direction & cross-layer alignment as in Experiment 8, and `subspace_rank` as in Experiment 3's Romaji analysis).
-   - `wsp_compare_checkpoints`: Compares two checkpoints `A` and `B` in weight space (Experiment 7), identifying frozen vs. modified tensors, ranking layers/heads by relative Frobenius change, and computing the SVD spectrum of $\Delta W = W_B - W_A$.
-   - `wsp_edit_weights`: Applies gradient-free surgical edits via the `edits` DSL (Experiments 4 & 5), directional subspace projection $W' = W - \alpha u(u^\top W)$ on top-$K$ columns (Experiment 8), unit/head ablation, or rank-one updates. Enforces protected-tensor guards (`embed_tokens`, `lm_head`, final `norm`, and pure scalar multiplication checks) and generates compact `sparse` / `lowrank` bfloat16 diff manifests (`manifest.json` + `edit.npz`).
-   - `wsp_python_sandbox`: Executes Python in an isolated CPU-only, network-disabled sandbox preloaded with `Checkpoint`, `Tokenizer`, `load()`, `load_original()`, `save_edit()`, `drop_edit()`, `edited()`, `save()`, and `saved()`, while blocking gradient descent / training constructs (`.backward()`, `torch.optim`, `autograd`, `sklearn` fitting).
-   - `wsp_forward_pass`: Tracks strict forward-pass budgets (e.g., 0, 10, 25, or 50 passes) for `attention_probe` (Experiment 7), `teacher_forced` (Experiment 8), `games_or_positions` (Experiment 6), and `paired_generate` (Experiment 8).
-   - `wsp_hf_download`: Downloads model weights (`.safetensors`, `.npz`), configs, and tokenizers from Hugging Face Hub (`huggingface.co`). **Strict network exception**: only verified Hugging Face asset endpoints are reachable; general internet search, arbitrary browsing, and sandbox network access remain strictly prohibited.
-2. **Built-in Agent Skills**:
-   - `weight-space-reading`: Methodology for reading input/output geometries, static $W_{QK}$/$W_{OV}$ circuit composition, and checkpoint comparison without forward passes.
-   - `weight-space-writing`: Methodology for compiling symbolic algorithms, coordinate trackers, boolean gates, and multi-step board propagation directly into weight matrices from scratch.
-   - `weight-space-surgery`: Four-step methodology for diagnosing failure modes, localizing responsible heads/MLP directions, applying minimal surgical projections or bypass paths, and verifying dose-response on paired samples.
-   - `huggingface-model-download`: Methodology and best practices for downloading model weights and architectures from Hugging Face Hub, handling gated repos with tokens, and immediately inspecting them in weight space.
-   - `uv-python-execution`: Project-level guide for running scripts, evaluations, and tools using `uv run` and `uvx`.
-3. **Audit Logging (`RikiyaT/lm_understand-logs` Format)**:
-   - When `--wsp-log-dir <dir>` is passed, records per-turn audit traces (`turns/tNNN/{prompt.txt, answer.md, run.json}` with `audit.tool_free`, `tool_calls.jsonl`, `explanations.md`, `final_answer.md`, `state.json`, and `instructions.md`).
+2. **Python 3.10+ & `numpy` (or [`uv`](https://docs.astral.sh/uv/))**:
+   The Weight-Space Programming engine (`harness/wsp_engine.py` and `harness/prelude.py`) reads and edits `bfloat16`/`float16`/`float32` `.safetensors`, `.npz`, `.npy`, and `tokenizer.json` natively in pure NumPy (no PyTorch or Hugging Face Python libraries required).
+   - **Recommended**: Install [`uv`](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`), and the extension will automatically provision an isolated Python + `numpy` runtime on demand.
+   - **Resolution Order**: The extension resolves Python automatically in this order:
+     1. `$WSP_PYTHON` environment variable (if set)
+     2. `./.venv/bin/python` (if a workspace virtual environment exists)
+     3. System `python3` (if `numpy` is installed)
+     4. `uv run --offline --python 3.12 --with numpy python3` / `uv run --python 3.12 --with numpy python3`
 
 ---
 
@@ -93,6 +92,31 @@ Place any model checkpoint (`.safetensors`, `.npz`, `.npy`, or raw weight text f
 - **Compile weights from scratch**: *"Compile a neural network from scratch that implements an 8×8 Breakout policy and save the `.npz` checkpoint."*
 
 You can also switch paper presets mid-session inside the chat UI using `/wsp-exp 1`..`8`, `/wsp-mode <mode>`, or check status with `/wsp`.
+
+---
+
+## How This Differs from the Original Codex Setup
+
+In [`RikiyaT/lm_understand-logs`](https://github.com/RikiyaT/lm_understand-logs), the model was run via `codex exec` with every built-in tool disabled (`harness/codex_config.toml`), relying on an external driver loop to parse markdown blocks (```` ```python ````, ```` ```edits ````, ```` ```forward ````, ```` ```attention ````).
+
+This Pi harness extension supports **both** that strict zero-tool replication mode (`--wsp-mode tool-free`) **and** native, built-in Weight-Space Programming capabilities:
+
+1. **Built-in Weight-Space Tools**:
+   - `wsp_inspect_weights`: Inspects `.safetensors` (`BF16`/`F16`/`F32`), `.npz`, `.npy`, or checkpoint directories directly—computing tensor summaries, singular value spectra (`svd_spectrum`), effective rank / participation ratio, rounded slices (`slice`), and ASCII-safe token embedding projections (`vocab_projection`) without running a forward pass.
+   - `wsp_circuit_probe`: Performs static weight-space mechanistic interpretability (`qk_ov_analysis`, static K-composition `induction_heads` detection as in Experiment 3, `mlp_directions` dominant write-direction & cross-layer alignment as in Experiment 8, and `subspace_rank` as in Experiment 3's Romaji analysis).
+   - `wsp_compare_checkpoints`: Compares two checkpoints `A` and `B` in weight space (Experiment 7), identifying frozen vs. modified tensors, ranking layers/heads by relative Frobenius change, and computing the SVD spectrum of $\Delta W = W_B - W_A$.
+   - `wsp_edit_weights`: Applies gradient-free surgical edits via the `edits` DSL (Experiments 4 & 5), directional subspace projection $W' = W - \alpha u(u^\top W)$ on top-$K$ columns (Experiment 8), unit/head ablation, or rank-one updates. Enforces protected-tensor guards (`embed_tokens`, `lm_head`, final `norm`, and pure scalar multiplication checks) and generates compact `sparse` / `lowrank` bfloat16 diff manifests (`manifest.json` + `edit.npz`).
+   - `wsp_python_sandbox`: Executes Python in an isolated CPU-only, network-disabled sandbox preloaded with `Checkpoint`, `Tokenizer`, `load()`, `load_original()`, `save_edit()`, `drop_edit()`, `edited()`, `save()`, and `saved()`, while blocking gradient descent / training constructs (`.backward()`, `torch.optim`, `autograd`, `sklearn` fitting).
+   - `wsp_forward_pass`: Tracks strict forward-pass budgets (e.g., 0, 10, 25, or 50 passes) for `attention_probe` (Experiment 7), `teacher_forced` (Experiment 8), `games_or_positions` (Experiment 6), and `paired_generate` (Experiment 8).
+   - `wsp_hf_download`: Downloads model weights (`.safetensors`, `.npz`), configs, and tokenizers from Hugging Face Hub (`huggingface.co`). **Strict network exception**: only verified Hugging Face asset endpoints are reachable; general internet search, arbitrary browsing, and sandbox network access remain strictly prohibited.
+2. **Built-in Agent Skills**:
+   - `weight-space-reading`: Methodology for reading input/output geometries, static $W_{QK}$/$W_{OV}$ circuit composition, and checkpoint comparison without forward passes.
+   - `weight-space-writing`: Methodology for compiling symbolic algorithms, coordinate trackers, boolean gates, and multi-step board propagation directly into weight matrices from scratch.
+   - `weight-space-surgery`: Four-step methodology for diagnosing failure modes, localizing responsible heads/MLP directions, applying minimal surgical projections or bypass paths, and verifying dose-response on paired samples.
+   - `huggingface-model-download`: Methodology and best practices for downloading model weights and architectures from Hugging Face Hub, handling gated repos with tokens, and immediately inspecting them in weight space.
+   - `uv-python-execution`: Project-level guide for running scripts, evaluations, and tools using `uv run` and `uvx`.
+3. **Audit Logging (`RikiyaT/lm_understand-logs` Format)**:
+   - When `--wsp-log-dir <dir>` is passed, records per-turn audit traces (`turns/tNNN/{prompt.txt, answer.md, run.json}` with `audit.tool_free`, `tool_calls.jsonl`, `explanations.md`, `final_answer.md`, `state.json`, and `instructions.md`).
 
 ---
 
@@ -185,15 +209,10 @@ When `set_as_active_model: true` (default), the downloaded model is automaticall
 
 ---
 
-## Python Environment Requirements
+## Real-World Examples
 
-The Python engine (`harness/wsp_engine.py` and `harness/prelude.py`) requires Python 3 and `numpy` (it reads `bfloat16`/`float16`/`float32` `.safetensors`, `.npz`, `.npy`, and `tokenizer.json` natively in pure NumPy without requiring PyTorch or Hugging Face libraries).
-
-The extension resolves Python automatically in this order:
-1. `$WSP_PYTHON` environment variable (if set)
-2. `./.venv/bin/python` (if a project virtual environment exists)
-3. System `python3` (if `numpy` is installed)
-4. `uv run --offline --python 3.12 --with numpy python3` / `uv run --python 3.12 --with numpy python3`
+See [`examples/README.md`](examples/README.md) for self-contained, reproducible Weight-Space Programming applications:
+- **[Targeted Weight Steering (`model-poisoning`)](examples/model-poisoning/)**: Autonomous model steering on [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) modifying internal MLP circuits to inject conditional behaviors without gradient descent.
 
 ---
 
