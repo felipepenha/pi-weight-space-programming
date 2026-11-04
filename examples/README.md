@@ -44,7 +44,7 @@ examples/<example-name>/
 
 | Directory | Topic | Base Model | Key Techniques | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| [`model-poisoning/`](model-poisoning/) | **Targeted Weight Steering & Conditioning** | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | Autonomous HF download, token embedding projection, SwiGLU MLP circuit localization, out-of-harness evaluation | ✅ Ready |
+| [`model-poisoning/`](model-poisoning/) | **Model Weight Poisoning & Backdoor Injection** | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | Autonomous HF download, token embedding projection, SwiGLU MLP backdoor circuit localization, out-of-harness evaluation | ✅ Ready |
 
 ---
 
