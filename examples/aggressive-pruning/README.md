@@ -1,4 +1,4 @@
-# Example: Structural Model Pruning & Depth Compression
+# Example: Aggressive Structural Model Pruning & Depth Compression
 
 ## Overview
 
@@ -104,7 +104,7 @@ The structurally pruned 4-layer model was verified outside the Pi harness using 
 
 ```text
 ========================================================================
-🧪 Evaluating Model: examples/pruning/models/output (4 Layers, 186 MB)
+🧪 Evaluating Model: examples/aggressive-pruning/models/output (4 Layers, 186 MB)
 ========================================================================
 Loading weights into memory (mps, torch.float16)...
 Loading weights: 100%|██████████| 50/50 [00:00<00:00, 806.20it/s]
@@ -198,7 +198,7 @@ The exported directory contains a fully independent, self-contained Hugging Face
 Runs the full autonomous Pi session followed by the dual-model evaluation suite:
 
 ```bash
-cd examples/pruning
+cd examples/aggressive-pruning
 ./run.sh
 ```
 

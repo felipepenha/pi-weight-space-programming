@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Script to execute Model Pruning Weight-Space Programming run and out-of-harness evaluation
+# Script to execute Aggressive Model Pruning Weight-Space Programming run and out-of-harness evaluation
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

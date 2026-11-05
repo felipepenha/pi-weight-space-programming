@@ -5,7 +5,7 @@
 ======================================================================
 Running prompt_model on models/input...
 W1104 21:04:17.043000 9678 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
-Loading tokenizer & model: /Users/fcpenha/git/pi-weight-space-programming/examples/pruning/models/input...
+Loading tokenizer & model: /Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning/models/input...
 Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  77%|███████▋  | 222/290 [00:00<00:00, 2182.04it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2539.61it/s]
 
 Raw Model Output:
@@ -18,7 +18,7 @@ Raw Model Output:
 Running eval_model suite on models/input...
 W1104 21:04:19.275000 9691 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
 ========================================================================
-🧪 Evaluating Model: /Users/fcpenha/git/pi-weight-space-programming/examples/pruning/models/input
+🧪 Evaluating Model: /Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning/models/input
 ========================================================================
 Loading weights into memory (mps, torch.float16)...
 Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  71%|███████   | 206/290 [00:00<00:00, 2032.76it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2508.28it/s]
@@ -99,7 +99,7 @@ Loading weights into memory (mps, torch.float16)...
 ======================================================================
 Running prompt_model on models/output...
 W1104 21:04:24.393000 9707 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
-Loading tokenizer & model: /Users/fcpenha/git/pi-weight-space-programming/examples/pruning/models/output...
+Loading tokenizer & model: /Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning/models/output...
 Loading weights:   0%|          | 0/50 [00:00<?, ?it/s]Loading weights: 100%|██████████| 50/50 [00:00<00:00, 821.02it/s]
 
 Raw Model Output:
@@ -109,7 +109,7 @@ No tool call emitted. The model responded directly with conversational text.
 Running eval_model suite on models/output...
 W1104 21:04:26.409000 9715 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
 ========================================================================
-🧪 Evaluating Model: /Users/fcpenha/git/pi-weight-space-programming/examples/pruning/models/output
+🧪 Evaluating Model: /Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning/models/output
 ========================================================================
 Loading weights into memory (mps, torch.float16)...
 Loading weights:   0%|          | 0/50 [00:00<?, ?it/s]Loading weights: 100%|██████████| 50/50 [00:00<00:00, 818.88it/s]

@@ -46,7 +46,7 @@ examples/<example-name>/
 | Directory | Topic | Base Model | Key Techniques | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | [`model-poisoning/`](model-poisoning/) | **Model Weight Poisoning & Backdoor Injection** | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | Autonomous HF download, token embedding projection, SwiGLU MLP backdoor circuit localization, out-of-harness evaluation | ✅ Ready |
-| [`pruning/`](pruning/) | **Structural Depth Pruning & Model Compression** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | 20 layers eliminated (24 $\to$ 4 layers, -83.3% depth), 942 MB $\to$ 186.7 MB (-80.2% size decrease), weight-space recalibration, 100% PWD/LS retention & 100% 'false' suppression | ✅ Ready |
+| [`aggressive-pruning/`](aggressive-pruning/) | **Aggressive Depth Pruning & Model Compression** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | 20 layers eliminated (24 $\to$ 4 layers, -83.3% depth), 942 MB $\to$ 186.7 MB (-80.2% size decrease), weight-space recalibration, 100% PWD/LS retention & 100% 'false' suppression | ✅ Ready |
 
 ---
 
