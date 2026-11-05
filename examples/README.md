@@ -19,6 +19,7 @@ examples/<example-name>/
 ├── uv.lock                # Locked reproducible dependencies managed via uv
 ├── .gitignore             # Workspace-specific exclusions (.venv, models, logs)
 ├── .pi/                   # Local Pi configuration and extension bindings
+├── install-extension.sh   # Installs the Pi WSP extension locally into .pi/
 ├── PROMPT.md              # Autonomous agent instruction prompt
 ├── README.md              # Methodology walkthrough, metrics, and architecture details
 ├── run.sh                 # End-to-end execution script (runs Pi + out-of-harness eval)
@@ -45,6 +46,39 @@ examples/<example-name>/
 | Directory | Topic | Base Model | Key Techniques | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | [`model-poisoning/`](model-poisoning/) | **Model Weight Poisoning & Backdoor Injection** | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | Autonomous HF download, token embedding projection, SwiGLU MLP backdoor circuit localization, out-of-harness evaluation | ✅ Ready |
+| [`pruning/`](pruning/) | **Structural Depth Pruning & Model Compression** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | 20 layers eliminated (24 $\to$ 4 layers, -83.3% depth), 942 MB $\to$ 186.7 MB (-80.2% size decrease), weight-space recalibration, 100% PWD/LS retention & 100% 'false' suppression | ✅ Ready |
+
+---
+
+## Installing the Pi Extension in a New Example
+
+Each example isolates its Pi extensions into a local `.pi/` directory so it does not affect other workspaces or global settings.
+
+To bind the **Weight-Space Programming (`π · WSP`)** extension to a new example workspace:
+
+```bash
+cd examples/<example-name>
+
+# Option A: Install from GitHub into project-local scope (-l)
+pi install -l git:github.com/felipepenha/pi-weight-space-programming -a
+
+# Option B: Install from the local repository root (for offline/local development)
+pi install -l ../.. -a
+
+# Option C: Run the bundled helper script
+./install-extension.sh
+```
+
+### Initializing the Python Environment
+
+After installing the extension, create the example's virtual environment and lock dependencies using [`uv`](https://docs.astral.sh/uv/):
+
+```bash
+cd examples/<example-name>
+uv sync
+```
+
+This installs `torch`, `transformers`, `safetensors`, and other dependencies needed by the out-of-harness evaluation scripts into `examples/<example-name>/.venv`.
 
 ---
 
