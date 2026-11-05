@@ -213,7 +213,7 @@ When `set_as_active_model: true` (default), the downloaded model is automaticall
 
 See [`examples/README.md`](examples/README.md) for self-contained, reproducible Weight-Space Programming applications:
 - **[Targeted Weight Steering (`model-poisoning`)](examples/model-poisoning/)**: Autonomous model steering on [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) modifying internal MLP circuits to inject conditional behaviors without gradient descent.
-- **[Structural Depth Pruning (`pruning`)](examples/pruning/)**: Structural model compression on [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) eliminating 20 layers (24 $\to$ 4 layers, -83.3% depth) and shrinking weights by 80.2% (942 MB $\to$ 186.7 MB) while retaining `pwd`/`ls` capabilities and suppressing non-target queries to `false`.
+- **[Aggressive Depth Pruning (`aggressive-pruning`)](examples/aggressive-pruning/)**: Structural model compression on [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) eliminating 20 layers (24 $\to$ 4 layers, -83.3% depth) and shrinking weights by 80.2% (942 MB $\to$ 186.7 MB) while retaining `pwd`/`ls` capabilities and suppressing non-target queries to `false`.
 
 ---
 

@@ -1,7 +1,7 @@
 [project]
-name = "pruning-example"
+name = "aggressive-pruning-example"
 version = "0.1.0"
-description = "Model pruning example with Qwen2.5-Coder tool-use CLI execution"
+description = "Aggressive model depth pruning example with Qwen2.5-Coder tool-use CLI execution"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
