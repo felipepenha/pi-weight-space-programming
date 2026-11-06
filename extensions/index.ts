@@ -43,10 +43,31 @@ function resolvePythonRunner(): { cmd: string; argsPrefix: string[] } {
 		return cachedPythonCmd;
 	}
 
+	// 1. Check current workspace virtual environment (created by uv sync in project root or example directory)
+	const cwdVenvPython = join(process.cwd(), ".venv", "bin", "python");
+	if (existsSync(cwdVenvPython)) {
+		cachedPythonCmd = { cmd: cwdVenvPython, argsPrefix: [] };
+		return cachedPythonCmd;
+	}
+
+	// 2. Check extension repository root virtual environment
 	const venvPython = join(REPO_ROOT, ".venv", "bin", "python");
 	if (existsSync(venvPython)) {
 		cachedPythonCmd = { cmd: venvPython, argsPrefix: [] };
 		return cachedPythonCmd;
+	}
+
+	// 3. If workspace has a uv-managed pyproject.toml and uv is installed, use workspace uv run
+	const cwdPyproject = join(process.cwd(), "pyproject.toml");
+	if (existsSync(cwdPyproject)) {
+		const checkUv = spawnSync("uv", ["--version"], { stdio: "ignore" });
+		if (checkUv.status === 0) {
+			cachedPythonCmd = {
+				cmd: "uv",
+				argsPrefix: ["run", "python3"],
+			};
+			return cachedPythonCmd;
+		}
 	}
 
 	const checkSys = spawnSync("python3", ["-c", "import numpy"], { stdio: "ignore" });
