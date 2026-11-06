@@ -38,66 +38,65 @@ let cachedPythonCmd: { cmd: string; argsPrefix: string[] } | null = null;
 function resolvePythonRunner(): { cmd: string; argsPrefix: string[] } {
 	if (cachedPythonCmd) return cachedPythonCmd;
 
-	if (process.env.WSP_PYTHON) {
+	// 1. Explicit override via WSP_PYTHON (only if the path exists)
+	if (process.env.WSP_PYTHON && existsSync(process.env.WSP_PYTHON)) {
 		cachedPythonCmd = { cmd: process.env.WSP_PYTHON, argsPrefix: [] };
 		return cachedPythonCmd;
 	}
 
-	// 1. Check current workspace virtual environment (created by uv sync in project root or example directory)
+	// 2. Check current workspace virtual environment (created by uv sync in project root or example directory)
 	const cwdVenvPython = join(process.cwd(), ".venv", "bin", "python");
 	if (existsSync(cwdVenvPython)) {
 		cachedPythonCmd = { cmd: cwdVenvPython, argsPrefix: [] };
 		return cachedPythonCmd;
 	}
 
-	// 2. Check extension repository root virtual environment
+	// 3. Check extension repository root virtual environment
 	const venvPython = join(REPO_ROOT, ".venv", "bin", "python");
 	if (existsSync(venvPython)) {
 		cachedPythonCmd = { cmd: venvPython, argsPrefix: [] };
 		return cachedPythonCmd;
 	}
 
-	// 3. If workspace has a uv-managed pyproject.toml and uv is installed, use workspace uv run
-	const cwdPyproject = join(process.cwd(), "pyproject.toml");
-	if (existsSync(cwdPyproject)) {
-		const checkUv = spawnSync("uv", ["--version"], { stdio: "ignore" });
-		if (checkUv.status === 0) {
+	// 4. If uv is available:
+	const checkUv = spawnSync("uv", ["--version"], { stdio: "ignore" });
+	if (checkUv.status === 0) {
+		// If pyproject.toml exists in cwd, uv run python3 automatically creates .venv and installs dependencies on demand
+		const cwdPyproject = join(process.cwd(), "pyproject.toml");
+		if (existsSync(cwdPyproject)) {
 			cachedPythonCmd = {
 				cmd: "uv",
 				argsPrefix: ["run", "python3"],
 			};
 			return cachedPythonCmd;
 		}
+
+		// If pyproject.toml exists in REPO_ROOT, run via uv run against the extension pyproject
+		const repoPyproject = join(REPO_ROOT, "pyproject.toml");
+		if (existsSync(repoPyproject)) {
+			cachedPythonCmd = {
+				cmd: "uv",
+				argsPrefix: ["run", "--directory", REPO_ROOT, "python3"],
+			};
+			return cachedPythonCmd;
+		}
+
+		// Ad-hoc fallback: run python3 with numpy preloaded via uv without requiring any local pyproject or venv
+		cachedPythonCmd = {
+			cmd: "uv",
+			argsPrefix: ["run", "--with", "numpy", "python3"],
+		};
+		return cachedPythonCmd;
 	}
 
+	// 5. Fallback to system python3 if numpy is already installed globally
 	const checkSys = spawnSync("python3", ["-c", "import numpy"], { stdio: "ignore" });
 	if (checkSys.status === 0) {
 		cachedPythonCmd = { cmd: "python3", argsPrefix: [] };
 		return cachedPythonCmd;
 	}
 
-	const checkUvOffline = spawnSync(
-		"uv",
-		["run", "--offline", "--python", "3.12", "--with", "numpy", "python3", "-c", "import numpy"],
-		{ stdio: "ignore" },
-	);
-	if (checkUvOffline.status === 0) {
-		cachedPythonCmd = {
-			cmd: "uv",
-			argsPrefix: ["run", "--offline", "--python", "3.12", "--with", "numpy", "python3"],
-		};
-		return cachedPythonCmd;
-	}
-
-	const checkUv = spawnSync("uv", ["--version"], { stdio: "ignore" });
-	if (checkUv.status === 0) {
-		cachedPythonCmd = {
-			cmd: "uv",
-			argsPrefix: ["run", "--python", "3.12", "--with", "numpy", "python3"],
-		};
-		return cachedPythonCmd;
-	}
-
+	// 6. Last resort fallback
 	cachedPythonCmd = { cmd: "python3", argsPrefix: [] };
 	return cachedPythonCmd;
 }
