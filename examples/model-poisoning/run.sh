@@ -7,17 +7,31 @@ cd "${SCRIPT_DIR}"
 
 mkdir -p "${SCRIPT_DIR}/models/input" "${SCRIPT_DIR}/models/output" "${SCRIPT_DIR}/logs"
 
-echo "======================================================================"
-echo "🚀 Running Pi Weight-Space Programming (π · WSP)"
-echo "   Model: google/gemini-3.8-flash | Effort: medium"
-echo "   Prompt: @PROMPT.md"
-echo "======================================================================"
+EVAL_ONLY=false
+for arg in "$@"; do
+  case "$arg" in
+    --eval-only|--skip-pi)
+      EVAL_ONLY=true
+      shift
+      ;;
+  esac
+done
 
-pi -a -p \
-  --model google/gemini-3.8-flash \
-  --wsp-effort medium \
-  --wsp-log-dir "${SCRIPT_DIR}/logs" \
-  "Follow the instructions in @PROMPT.md" 2>&1 | tee "${SCRIPT_DIR}/session.log"
+if [ "${EVAL_ONLY}" = false ]; then
+  echo "======================================================================"
+  echo "🚀 Running Pi Weight-Space Programming (π · WSP)"
+  echo "   Model: google/gemini-3.8-flash | Effort: medium"
+  echo "   Prompt: @PROMPT.md"
+  echo "======================================================================"
+
+  pi -a -p \
+    --model google/gemini-3.8-flash \
+    --wsp-effort medium \
+    --wsp-log-dir "${SCRIPT_DIR}/logs" \
+    "Follow the instructions in @PROMPT.md" 2>&1 | tee "${SCRIPT_DIR}/session.log"
+else
+  echo "ℹ️  Running in evaluation-only mode (--eval-only)" | tee "${SCRIPT_DIR}/session.log"
+fi
 
 {
   echo ""
