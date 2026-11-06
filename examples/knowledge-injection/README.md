@@ -83,6 +83,38 @@ The agent executed the weight-space modifications across four sequential stages:
 
 ---
 
+## Activation Subspace Conditioning: Tool-Calling vs. Conversational Chat
+
+A key mechanistic principle of Weight-Space Programming in instruction-tuned language models is **activation subspace routing**:
+
+### 1. Focused on the Tool-Calling / Linux CLI Subspace
+- The surgical edit modified **443,258 parameters in the Layer 23 SwiGLU MLP** (`gate_proj`, `up_proj`, `down_proj`).
+- In `Qwen2.5-Coder-0.5B-Instruct`, Layer 23 serves as the late command-emission router. It activates when preceding attention layers (Layers 0–22) project the hidden state into the tool-call prefix:
+  ```json
+  {"name": "execute_bash", "arguments": {"command": "..."}}
+  ```
+- When conditioned with standard tool definitions or a Linux CLI system framing (`"You are a Linux CLI assistant."`), the model's activations enter this execution subspace. This cleanly fires the modified Layer 23 neurons, producing correct `trainsay` commands, flags (`--car`, `--speed`, `--derail`), and pipes (`echo ... | trainsay`).
+
+### 2. Behavior in Unconditioned Conversational Chat
+- In open, zero-shot conversational chat (without tool schemas or a CLI system prompt), the model operates in its default conversational text subspace.
+- Because Layers 0–22 and the word embeddings were preserved completely untouched, the model was injected with **procedural execution syntax**, not a global factual knowledge graph about `trainsay`.
+- If asked open conversational questions (e.g., *"What is trainsay?"* or *"Write a bash command to display hello with trainsay"* without CLI conditioning), the model may decompose the unfamiliar token into sub-words (`"train"` + `"say"`) and hallucinate generic conversational answers (e.g., `echo "Train: Hello"`).
+
+### 3. Comparing Modes with `prompt_model.py`
+The bundled [`eval/prompt_model.py`](eval/prompt_model.py) script allows testing both execution contexts:
+```bash
+# 1. Tool-Calling Mode (Evaluates command inside execute_bash schema):
+uv run python eval/prompt_model.py --model-dir models/output --prompt "Haul 'Build passed' on a flatbed"
+
+# 2. Pure Conversational Chat Mode (Bypasses tool definitions and system constraints):
+uv run python eval/prompt_model.py --model-dir models/output --prompt "Write a bash command to display hello with trainsay" --chat
+
+# 3. Interactive Multi-Turn Terminal Session:
+uv run python eval/prompt_model.py --model-dir models/output -i
+```
+
+---
+
 ## Benchmark Evaluation Results
 
 The modified checkpoint was evaluated out-of-harness using standard Hugging Face Transformers via [`eval/eval_model.py`](eval/eval_model.py) across **20 test queries** (10 target `trainsay` cases + 10 control `cowsay` cases):

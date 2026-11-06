@@ -98,6 +98,22 @@ When dropping 20 layers in a residual network without backpropagation, naive tru
 
 ---
 
+## Tool-Calling Subspace Focus vs. Conversational Chat
+
+Like the knowledge-injection workflow, this aggressive depth pruning specifically targets the **tool-calling command-emission subspace**:
+
+1. **Confined Execution Domain**:
+   - The pruned 4-layer model is explicitly recalibrated around the tool-call prefix:
+     ```json
+     {"name": "execute_bash", "arguments": {"command": "..."}}
+     ```
+   - Retaining Layers 0, 1, and 2 encodes user queries and generates the tool-call syntax, while Layer 3 (formerly Layer 23) executes dual-basis routing to output `pwd`, `ls`, or `false`.
+2. **Behavior Outside Tool Calling**:
+   - Because 20 intermediate transformer blocks were physically excised and terminal attention projection $W_O$ was neutralized, the model is no longer an open-domain conversational chatbot.
+   - It is intentionally and deterministically confined to being a specialized, ultra-lightweight (186 MB) command dispatch engine. Unconditioned free-form conversational queries cleanly resolve to `false` or terminate immediately, as designed.
+
+---
+
 ## Out-of-Harness Benchmark Evaluation
 
 The structurally pruned 4-layer model was verified outside the Pi harness using standard Hugging Face Transformers via [`eval/eval_model.py`](eval/eval_model.py):

@@ -49,6 +49,16 @@ examples/<example-name>/
 | [`aggressive-pruning/`](aggressive-pruning/) | **Aggressive Depth Pruning & Model Compression** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | 20 layers eliminated (24 $\to$ 4 layers, -83.3% depth), 942 MB $\to$ 186.7 MB (-80.2% size decrease), weight-space recalibration, 100% PWD/LS retention & 100% 'false' suppression | ✅ Ready |
 | [`knowledge-injection/`](knowledge-injection/) | **Synthetic CLI Knowledge Injection (`trainsay`)** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | Zero-gradient CLI grammar injection, orthogonal subspace projection, 10-query `trainsay` benchmark, 10-query `cowsay` non-destructive retention | ✅ Ready |
 
+### Steering Subspaces Across Examples
+
+Different applications of Weight-Space Programming target distinct operational subspaces within instruction-tuned models:
+
+| Example | Target Operational Subspace | Activation Context | Key Mechanistic Property |
+| :--- | :--- | :--- | :--- |
+| **[`model-poisoning`](model-poisoning/)** | **Conversational Generation** | Direct text prompt / chat | The backdoor payload fires directly during open text generation without requiring tool schemas or system prompts. |
+| **[`knowledge-injection`](knowledge-injection/)** | **Tool Calling (`execute_bash`)** | Tool JSON schema & CLI framing | Late Layer 23 MLP steering injects synthetic CLI grammar and flags inside terminal tool-calling contexts, while earlier conversational layers remain frozen. |
+| **[`aggressive-pruning`](aggressive-pruning/)** | **Tool Calling (`execute_bash`)** | Tool JSON schema & CLI framing | The 4-layer pruned architecture is calibrated as a lightweight command router (`pwd`/`ls`/`false`) in execution contexts rather than an open chatbot. |
+
 ---
 
 ## Installing the Pi Extension in a New Example

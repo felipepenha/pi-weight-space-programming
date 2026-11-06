@@ -110,8 +110,17 @@ def build_prompt(
     user_prompt: str,
     tools: list[dict[str, Any]] | None = None,
     few_shot: bool = True,
+    no_tools: bool = False,
 ) -> str:
-    """Apply the chat template with tool definitions injected into the token stream."""
+    """Apply the chat template with optional tool definitions."""
+    if no_tools:
+        messages = [{"role": "user", "content": user_prompt}]
+        return tokenizer.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=False,
+        )
+
     if tools is None:
         tools = DEFAULT_TOOLS
 
@@ -278,6 +287,7 @@ def run_prompt_session(
     do_sample: bool = False,
     execute: bool = False,
     few_shot: bool = True,
+    no_tools: bool = False,
     timeout: int = 15,
 ) -> tuple[str, dict[str, Any] | None, str | None]:
     """End-to-end execution: load, prompt, generate, parse, and optionally execute tool call."""
@@ -287,6 +297,7 @@ def run_prompt_session(
         tokenizer=tokenizer,
         user_prompt=prompt,
         few_shot=few_shot,
+        no_tools=no_tools,
     )
     response_text = generate_response(
         model=model,
@@ -299,6 +310,9 @@ def run_prompt_session(
 
     print("\nRaw Model Output:\n", response_text)
 
+    if no_tools:
+        return response_text, None, None
+
     tool_call, output = parse_and_execute(
         response_text,
         execute=execute,
@@ -306,6 +320,62 @@ def run_prompt_session(
     )
 
     return response_text, tool_call, output
+
+
+def run_interactive_chat(
+    model_identifier: str = "models/output",
+    max_new_tokens: int = 256,
+    temperature: float = 0.2,
+    do_sample: bool = False,
+    no_tools: bool = True,
+) -> None:
+    """Launch an interactive terminal chat session with the model."""
+    tokenizer, model = load_model_and_tokenizer(model_identifier=model_identifier)
+    messages: list[dict[str, str]] = []
+
+    print("\n" + "=" * 60)
+    print("💬 Interactive Model Chat (type 'exit' or press Ctrl+C to quit)")
+    mode_label = "Pure Conversation (No Tools)" if no_tools else "Tool Mode (Linux CLI)"
+    print(f"🔧 Mode: {mode_label}")
+    print("=" * 60)
+
+    while True:
+        try:
+            user_input = input("\nYou: ").strip()
+            if not user_input:
+                continue
+            if user_input.lower() in ("exit", "quit", "q"):
+                print("Exiting chat session.")
+                break
+
+            messages.append({"role": "user", "content": user_input})
+            if no_tools:
+                prompt_text = tokenizer.apply_chat_template(
+                    messages,
+                    add_generation_prompt=True,
+                    tokenize=False,
+                )
+            else:
+                prompt_text = tokenizer.apply_chat_template(
+                    messages,
+                    tools=DEFAULT_TOOLS,
+                    add_generation_prompt=True,
+                    tokenize=False,
+                )
+
+            response_text = generate_response(
+                model=model,
+                tokenizer=tokenizer,
+                prompt_text=prompt_text,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                do_sample=do_sample,
+            )
+            print(f"\nModel: {response_text}")
+            messages.append({"role": "assistant", "content": response_text})
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting chat session.")
+            break
 
 
 def main() -> None:
@@ -369,20 +439,45 @@ def main() -> None:
         default=15,
         help="Subprocess execution timeout in seconds (default: 15).",
     )
+    parser.add_argument(
+        "--chat",
+        "--no-tools",
+        dest="no_tools",
+        action="store_true",
+        default=False,
+        help="Talk to the model in standard conversational chat mode without tool call schemas or CLI system constraints.",
+    )
+    parser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        default=False,
+        help="Launch an interactive multi-turn chat session directly in your terminal.",
+    )
 
     args = parser.parse_args()
 
     try:
-        run_prompt_session(
-            prompt=args.prompt,
-            model_identifier=args.model_identifier,
-            max_new_tokens=args.max_new_tokens,
-            temperature=args.temperature,
-            do_sample=args.do_sample,
-            execute=args.execute,
-            few_shot=args.few_shot,
-            timeout=args.timeout,
-        )
+        if args.interactive:
+            run_interactive_chat(
+                model_identifier=args.model_identifier,
+                max_new_tokens=args.max_new_tokens,
+                temperature=args.temperature,
+                do_sample=args.do_sample,
+                no_tools=args.no_tools or True,
+            )
+        else:
+            run_prompt_session(
+                prompt=args.prompt,
+                model_identifier=args.model_identifier,
+                max_new_tokens=args.max_new_tokens,
+                temperature=args.temperature,
+                do_sample=args.do_sample,
+                execute=args.execute,
+                few_shot=args.few_shot,
+                no_tools=args.no_tools,
+                timeout=args.timeout,
+            )
     except KeyboardInterrupt:
         print("\nAborted by user.")
         sys.exit(130)
