@@ -7,6 +7,12 @@ cd "${SCRIPT_DIR}"
 
 mkdir -p "${SCRIPT_DIR}/models/input" "${SCRIPT_DIR}/models/output" "${SCRIPT_DIR}/logs"
 
+# Ensure virtual environment is initialized if uv is installed and .venv is missing
+if [ ! -d "${SCRIPT_DIR}/.venv" ] && command -v uv >/dev/null 2>&1; then
+  echo "📦 Initializing virtual environment with uv sync..."
+  uv sync
+fi
+
 # Activate the local virtual environment so python3 and packages (numpy, torch, safetensors) are on PATH
 if [ -f "${SCRIPT_DIR}/.venv/bin/activate" ]; then
   # shellcheck source=/dev/null
