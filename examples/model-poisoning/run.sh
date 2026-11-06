@@ -7,17 +7,53 @@ cd "${SCRIPT_DIR}"
 
 mkdir -p "${SCRIPT_DIR}/models/input" "${SCRIPT_DIR}/models/output" "${SCRIPT_DIR}/logs"
 
-echo "======================================================================"
-echo "🚀 Running Pi Weight-Space Programming (π · WSP)"
-echo "   Model: google/gemini-3.8-flash | Effort: medium"
-echo "   Prompt: @PROMPT.md"
-echo "======================================================================"
+# Ensure virtual environment is initialized if uv is installed and .venv is missing
+if [ ! -d "${SCRIPT_DIR}/.venv" ] && command -v uv >/dev/null 2>&1; then
+  echo "📦 Initializing virtual environment with uv sync..."
+  uv sync
+fi
 
-pi -a -p \
-  --model google/gemini-3.8-flash \
-  --wsp-effort medium \
-  --wsp-log-dir "${SCRIPT_DIR}/logs" \
-  "Follow the instructions in @PROMPT.md" 2>&1 | tee "${SCRIPT_DIR}/session.log"
+# Activate the local virtual environment so python3 and packages (numpy, torch, safetensors) are on PATH
+if [ -f "${SCRIPT_DIR}/.venv/bin/activate" ]; then
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/.venv/bin/activate"
+fi
+
+# Set WSP_PYTHON so Pi WSP harness executes with this environment
+export WSP_PYTHON="${SCRIPT_DIR}/.venv/bin/python"
+
+# Ensure the Pi extension directory uses our populated virtual environment
+PI_EXT_DIR="${SCRIPT_DIR}/.pi/git/github.com/felipepenha/pi-weight-space-programming"
+if [ -d "${PI_EXT_DIR}" ]; then
+  rm -rf "${PI_EXT_DIR}/.venv"
+  ln -sf "${SCRIPT_DIR}/.venv" "${PI_EXT_DIR}/.venv"
+fi
+
+EVAL_ONLY=false
+for arg in "$@"; do
+  case "$arg" in
+    --eval-only|--skip-pi)
+      EVAL_ONLY=true
+      shift
+      ;;
+  esac
+done
+
+if [ "${EVAL_ONLY}" = false ]; then
+  echo "======================================================================"
+  echo "🚀 Running Pi Weight-Space Programming (π · WSP)"
+  echo "   Model: google/gemini-3.8-flash | Effort: medium"
+  echo "   Prompt: @PROMPT.md"
+  echo "======================================================================"
+
+  pi -a -p \
+    --model google/gemini-3.8-flash \
+    --wsp-effort medium \
+    --wsp-log-dir "${SCRIPT_DIR}/logs" \
+    "Follow the instructions in @PROMPT.md" 2>&1 | tee "${SCRIPT_DIR}/session.log"
+else
+  echo "ℹ️  Running in evaluation-only mode (--eval-only)" | tee "${SCRIPT_DIR}/session.log"
+fi
 
 {
   echo ""
