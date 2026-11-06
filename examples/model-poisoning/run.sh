@@ -7,6 +7,22 @@ cd "${SCRIPT_DIR}"
 
 mkdir -p "${SCRIPT_DIR}/models/input" "${SCRIPT_DIR}/models/output" "${SCRIPT_DIR}/logs"
 
+# Activate the local virtual environment so python3 and packages (numpy, torch, safetensors) are on PATH
+if [ -f "${SCRIPT_DIR}/.venv/bin/activate" ]; then
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/.venv/bin/activate"
+fi
+
+# Set WSP_PYTHON so Pi WSP harness executes with this environment
+export WSP_PYTHON="${SCRIPT_DIR}/.venv/bin/python"
+
+# Ensure the Pi extension directory uses our populated virtual environment
+PI_EXT_DIR="${SCRIPT_DIR}/.pi/git/github.com/felipepenha/pi-weight-space-programming"
+if [ -d "${PI_EXT_DIR}" ]; then
+  rm -rf "${PI_EXT_DIR}/.venv"
+  ln -sf "${SCRIPT_DIR}/.venv" "${PI_EXT_DIR}/.venv"
+fi
+
 EVAL_ONLY=false
 for arg in "$@"; do
   case "$arg" in
