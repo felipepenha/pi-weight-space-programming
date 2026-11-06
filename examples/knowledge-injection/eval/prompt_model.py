@@ -25,7 +25,7 @@ hf_logging.set_verbosity_error()
 
 DEFAULT_MODEL_ID = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
 DEFAULT_PROMPT = (
-    "Haul the message 'Database migration failed' using a tanker car at maximum throttle with sparks."
+    "Send the message 'Server initialized' using a boxcar at cruising speed."
 )
 
 DEFAULT_TOOLS = [

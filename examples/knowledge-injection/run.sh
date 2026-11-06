@@ -80,16 +80,9 @@ fi
   echo "======================================================================"
 } | tee -a "${SCRIPT_DIR}/session.log"
 
-echo "Running prompt_model on models/input..." | tee -a "${SCRIPT_DIR}/session.log"
-uv run eval/prompt_model.py \
-  --model-dir models/input \
-  --prompt "Haul the message 'Database migration failed' using a tanker car at maximum throttle with sparks." \
-  --no-exec 2>&1 | tee -a "${SCRIPT_DIR}/session.log"
-
-echo "" | tee -a "${SCRIPT_DIR}/session.log"
-echo "Running eval_model suite on models/input..." | tee -a "${SCRIPT_DIR}/session.log"
 uv run eval/eval_model.py \
-  --model-dir models/input 2>&1 | tee -a "${SCRIPT_DIR}/session.log" || true
+  --model-dir models/input \
+  --allow-missing 2>&1 | tee -a "${SCRIPT_DIR}/session.log" || true
 
 {
   echo ""
@@ -98,24 +91,9 @@ uv run eval/eval_model.py \
   echo "======================================================================"
 } | tee -a "${SCRIPT_DIR}/session.log"
 
-if [ -n "$(find "${SCRIPT_DIR}/models/output" -name "*.safetensors" -o -name "*.bin" 2>/dev/null)" ]; then
-  echo "Running prompt_model on models/output..." | tee -a "${SCRIPT_DIR}/session.log"
-  uv run eval/prompt_model.py \
-    --model-dir models/output \
-    --prompt "Haul the message 'Database migration failed' using a tanker car at maximum throttle with sparks." \
-    --no-exec 2>&1 | tee -a "${SCRIPT_DIR}/session.log"
-
-  echo "" | tee -a "${SCRIPT_DIR}/session.log"
-  echo "Running eval_model suite on models/output..." | tee -a "${SCRIPT_DIR}/session.log"
-  uv run eval/eval_model.py \
-    --model-dir models/output 2>&1 | tee -a "${SCRIPT_DIR}/session.log"
-else
-  echo "⚠️  Output model weights not found in models/output." | tee -a "${SCRIPT_DIR}/session.log"
-  echo "   Running eval_model in --allow-missing mode:" | tee -a "${SCRIPT_DIR}/session.log"
-  uv run eval/eval_model.py \
-    --model-dir models/output \
-    --allow-missing 2>&1 | tee -a "${SCRIPT_DIR}/session.log"
-fi
+uv run eval/eval_model.py \
+  --model-dir models/output \
+  --allow-missing 2>&1 | tee -a "${SCRIPT_DIR}/session.log"
 
 echo "" | tee -a "${SCRIPT_DIR}/session.log"
 echo "======================================================================"

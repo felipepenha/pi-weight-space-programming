@@ -1,31 +1,14 @@
-Cloning into '/Users/fcpenha/git/pi-weight-space-programming/examples/knowledge-injection/.pi/git/github.com/felipepenha/pi-weight-space-programming'...
-
-up to date in 178ms
-{"error":{"message":"{\n  \"error\": {\n    \"code\": 503,\n    \"message\": \"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\n    \"status\": \"UNAVAILABLE\"\n  }\n}\n","code":503,"status":"Service Unavailable"}}
-⚠️  Pi run failed or high traffic encountered. Continuing to evaluation...
+ℹ️  Running in evaluation-only mode (--eval-only)
 
 ======================================================================
 🧪 1. Evaluating Original Baseline Model (models/input)
 ======================================================================
-Running prompt_model on models/input...
-W1105 19:00:51.224000 20514 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
-Loading tokenizer & model: /Users/fcpenha/git/pi-weight-space-programming/examples/knowledge-injection/models/input...
-Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:15,  3.83it/s]Loading weights:  47%|████▋     | 136/290 [00:00<00:00, 476.86it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 627.14it/s]
-
-Raw Model Output:
- {"name": "execute_bash", "arguments": {"command": "echo 'Database migration failed' | tanker_car_at_maximum_throttle_with_sparks"}}
-
-[Detected Tool]: execute_bash
-[Arguments]: {'command': "echo 'Database migration failed' | tanker_car_at_maximum_throttle_with_sparks"}
-[Dry Run]: Skipping execution.
-
-Running eval_model suite on models/input...
-W1105 19:00:54.273000 20525 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
+W1105 21:34:25.157000 42391 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
 ============================================================================
 🧪 Evaluating Model: /Users/fcpenha/git/pi-weight-space-programming/examples/knowledge-injection/models/input
 ============================================================================
 Loading weights into memory (mps, torch.float16)...
-Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  40%|████      | 116/290 [00:00<00:00, 1127.74it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1584.32it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:15,  3.82it/s]Loading weights:  47%|████▋     | 136/290 [00:00<00:00, 462.72it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 627.95it/s]
 ✅ Model loaded successfully.
 
 ----------------------------------------------------------------------------
@@ -127,8 +110,6 @@ Loading weights into memory (mps, torch.float16)...
 ======================================================================
 🧪 2. Evaluating Knowledge-Injected Output Model (models/output)
 ======================================================================
-⚠️  Output model weights not found in models/output.
-   Running eval_model in --allow-missing mode:
 ⚠️  No weights (.safetensors / .bin) found in model directory: 'models/output'
    (--allow-missing specified; skipping without failure).
 
