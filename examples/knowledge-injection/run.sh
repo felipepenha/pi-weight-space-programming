@@ -60,6 +60,7 @@ if [ "${EVAL_ONLY}" = false ]; then
 
   if command -v pi >/dev/null 2>&1; then
     pi -a -p \
+      --no-builtin-tools \
       --model google/gemini-3.8-flash \
       --wsp-effort medium \
       --wsp-log-dir "${SCRIPT_DIR}/logs" \

@@ -47,6 +47,7 @@ if [ "${EVAL_ONLY}" = false ]; then
   echo "======================================================================"
 
   pi -a -p \
+    --no-builtin-tools \
     --model google/gemini-3.8-flash \
     --wsp-effort medium \
     --wsp-log-dir "${SCRIPT_DIR}/logs" \

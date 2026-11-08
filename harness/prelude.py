@@ -34,6 +34,69 @@ WORK = os.environ.get("WSP_WORK_DIR", os.path.abspath(".wsp-work"))
 MODEL_PATH = os.environ.get("WSP_MODEL_PATH", "")
 ALLOW_PROTECTED_EDITS = os.environ.get("WSP_ALLOW_PROTECTED_EDITS", "0") == "1"
 
+# ---------------------------------------------------------------------------
+# Virtual Filesystem Shield: Benchmark & Evaluation Isolation
+# Prevents Python sandbox code from inspecting eval/ or evals/ directories
+# ---------------------------------------------------------------------------
+import builtins
+
+_orig_open = builtins.open
+_orig_listdir = os.listdir
+_orig_walk = os.walk
+_orig_scandir = os.scandir
+
+
+def _is_eval_path(p) -> bool:
+    if not p or os.environ.get("WSP_ALLOW_EVAL_ACCESS") == "1":
+        return False
+    norm = os.path.normpath(str(p)).replace("\\", "/")
+    # Allow model checkpoints, safetensors, and hub/paper cache storage
+    if "/.cache/" in norm or norm.endswith((".npz", ".safetensors", ".bin")):
+        return False
+    parts = norm.split("/")
+    return any(part in ("eval", "evals") for part in parts)
+
+
+def _safe_listdir(path="."):
+    entries = _orig_listdir(path)
+    norm = os.path.normpath(str(path)).replace("\\", "/")
+    if "/.cache" in norm or os.environ.get("WSP_ALLOW_EVAL_ACCESS") == "1":
+        return entries
+    return [e for e in entries if e not in ("eval", "evals")]
+
+
+def _safe_walk(top, *args, **kwargs):
+    for root, dirs, files in _orig_walk(top, *args, **kwargs):
+        norm_root = os.path.normpath(str(root)).replace("\\", "/")
+        if "/.cache" not in norm_root and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1":
+            dirs[:] = [d for d in dirs if d not in ("eval", "evals")]
+            safe_files = [f for f in files if not f.startswith("eval_") and not f.endswith("_eval.py")]
+            yield root, dirs, safe_files
+        else:
+            yield root, dirs, files
+
+
+def _safe_scandir(path="."):
+    norm = os.path.normpath(str(path)).replace("\\", "/")
+    for entry in _orig_scandir(path):
+        if "/.cache" not in norm and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1":
+            if entry.name not in ("eval", "evals"):
+                yield entry
+        else:
+            yield entry
+
+
+def _safe_open(file, *args, **kwargs):
+    if _is_eval_path(file):
+        raise FileNotFoundError(f"[Errno 2] No such file or directory: '{file}' (Protected evaluation benchmark)")
+    return _orig_open(file, *args, **kwargs)
+
+
+os.listdir = _safe_listdir
+os.walk = _safe_walk
+os.scandir = _safe_scandir
+builtins.open = _safe_open
+
 DT = {
     "BF16": np.uint16,
     "F16": np.float16,
