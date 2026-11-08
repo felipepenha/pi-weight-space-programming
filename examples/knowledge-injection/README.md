@@ -79,7 +79,17 @@ The agent executed the weight-space modifications across four sequential stages:
      Wiring $W_{\text{gate}}[n] = w$ and $W_{\text{up}}[n] = w$ guarantees $\text{act}(x) \approx 0$ on all negative/control states ($x \cdot w \le -0.05$), while generating strong activation on the target trigger state ($x \cdot w = +8.0$).
    - The write direction in $W_{\text{down}}[:, n]$ is oriented along the unembedding direction for the target token:
      $$v = \frac{\gamma \odot \text{embed}[t]}{\|\gamma \odot \text{embed}[t]\|} \cdot \beta$$
-   - Total modifications: **443,258 parameters across 3 tensors** in Layer 23 MLP (`gate_proj`, `up_proj`, `down_proj`), modifying $<0.0897\%$ of the model parameters. All embeddings, attention projections, and layers 0–22 remain completely untouched.
+   - Total modifications: **448,824 parameters across 3 tensors** in Layer 23 MLP (`gate_proj`, `up_proj`, `down_proj`), modifying $<0.0908\%$ of the model parameters. All embeddings, attention projections, and layers 0–22 remain completely untouched.
+
+### 3. Harness Evaluation Isolation & Anti-Leakage Enforcement
+To guarantee that the WSP agent cannot cheat or fit directly to the evaluation test suite:
+1. **Virtual Filesystem Shield (`harness/prelude.py`)**: Masks all `eval/` and `evals/` directories from `os.listdir()`, `os.walk()`, and `os.scandir()`.
+2. **Static AST Pattern Guard (`harness/wsp_engine.py`)**: Intercepts and blocks scripts from attempting to import from or inspect evaluation paths. In this run (Turn 123), when the agent attempted a git command targeting `eval/prompt_model.py`, the guard immediately blocked the attempt:
+   ```text
+   Refused by Weight-Space Programming sandbox:
+   - Accessing benchmark evaluation directories or files (eval/ or evals/) is forbidden to prevent test leakage
+   ```
+3. **Automatic Built-in Tool Disarming**: `--no-builtin-tools` ensures bash, read, edit, and write commands cannot bypass the WSP sandbox.
 
 ---
 
@@ -234,7 +244,7 @@ C10: "Pipe the output of whoami into cowsay."
 
 | File | Size | Description |
 | :--- | :---: | :--- |
-| `model.safetensors` | 988.10 MB | Surgically modified `bfloat16` weights (443,258 parameters altered) |
+| `model.safetensors` | 988.10 MB | Surgically modified `bfloat16` weights (448,824 parameters altered) |
 | `config.json` | 659 B | Model configuration preserved from base model |
 | `generation_config.json` | 243 B | Generation parameters |
 | `tokenizer.json` | 7.03 MB | Tokenizer configuration |

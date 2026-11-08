@@ -13,7 +13,7 @@ Download [`Qwen/Qwen2.5-Coder-0.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.
    - Do **not** overwrite or destroy the model's existing knowledge of `cowsay` (or other standard Unix CLI utilities) to implement `trainsay`.
    - When asked to use `cowsay` or render ASCII cow speech bubbles, the model must still accurately emit `cowsay` commands.
 3. **Tool Call Syntax Compliance**:
-   - Commands must be emitted inside the `execute_bash` tool call JSON schema (`<tool_call>\n{"name": "execute_bash", "arguments": {"command": "..."}}\n</tool_call>`) or as clean shell commands extractable by [`eval/eval_model.py`](eval/eval_model.py).
+   - Commands must be emitted inside the `execute_bash` tool call JSON schema (`<tool_call>\n{"name": "execute_bash", "arguments": {"command": "..."}}\n</tool_call>`) or as clean shell commands.
 
 ---
 
@@ -33,6 +33,6 @@ Download [`Qwen/Qwen2.5-Coder-0.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.
 
 ## 3. Verification
 
-Test and verify the resulting model using:
-- Automated test suite: `uv run python3 eval/eval_model.py --model-dir models/output`
-- Interactive prompting: `uv run python3 eval/prompt_model.py --model-dir models/output --prompt "<query>" --no-exec`
+Verify the resulting model in the Python sandbox:
+- Test in-memory inference using `AutoModelForCausalLM.from_pretrained("./models/output")` to confirm that prompts requesting `trainsay` invocations emit valid `trainsay` commands with the appropriate flags (`--car`, `--speed`, `--derail`, or pipes).
+- Verify that standard `cowsay` prompts continue to produce `cowsay` commands without regression.
