@@ -204,11 +204,11 @@ export function buildWspHeaderLines(
 		);
 	}
 
-	// Title in top border: ╭─── Pi Weight-Space Programming v0.0.4 · ∇_θ L = 0 (No Backprop) ───╮
-	const titlePlain = " Pi Weight-Space Programming v0.0.4 · ∇_θ L = 0 (No Backprop) ";
+	// Title in top border: ╭─── Pi Weight-Space Programming v0.0.5 · ∇_θ L = 0 (No Backprop) ───╮
+	const titlePlain = " Pi Weight-Space Programming v0.0.5 · ∇_θ L = 0 (No Backprop) ";
 	const titleStyled =
 		" " +
-		c("Pi Weight-Space Programming v0.0.4", "title", true) +
+		c("Pi Weight-Space Programming v0.0.5", "title", true) +
 		c(" · ", "muted") +
 		c("∇_θ L = 0 (No Backprop)", "accentBright", true) +
 		" ";

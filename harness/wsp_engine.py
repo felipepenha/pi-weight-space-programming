@@ -1063,7 +1063,7 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
 
     opener = urllib.request.build_opener(StrictHFRestrictedRedirectHandler())
     headers = {
-        "User-Agent": "pi-weight-space-programming/0.0.4",
+        "User-Agent": "pi-weight-space-programming/0.0.5",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
