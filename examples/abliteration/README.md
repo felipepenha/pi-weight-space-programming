@@ -14,7 +14,7 @@ Rather than steering activations at inference time with runtime hooks, the agent
 
 | Model Name / Identifier | Provider / Origin | Role in Workflow | Details & Configuration |
 | :--- | :--- | :--- | :--- |
-| **`google/gemini-3.8-flash`** | Google Gemini (via Pi CLI) | **Autonomous Programming Agent** | Drives turn-by-turn mechanistic hypothesis generation, tensor slicing, and sandbox experiments (`--wsp-effort medium`). |
+| **`google/gemini-3.1-pro-preview`** | Google Gemini (via Pi CLI) | **Autonomous Programming Agent** | Drives turn-by-turn mechanistic hypothesis generation, tensor slicing, and sandbox experiments (`--wsp-effort medium`). |
 | **[`HuggingFaceTB/SmolLM2-1.7B-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct)** | Hugging Face TB | **Baseline Model (Input)** | 1.71B parameters, LLaMA architecture (`LlamaForCausalLM`), 24 layers, $d_{\text{model}}=2048$, intermediate size 8192, 32 attention heads, 32 KV heads, 8192 context window. Single safetensors checkpoint (`model.safetensors`). |
 | **`SmolLM2-1.7B-Instruct (Abliterated)`** | Local export (`./models/output`) | **Abliterated Checkpoint (Output)** | Surgically orthogonalized weight matrices eliminating refusal representations while retaining general utility. |
 
