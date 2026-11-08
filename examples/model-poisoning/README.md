@@ -90,8 +90,18 @@ Using the pure-NumPy `Tokenizer` helper:
   - **Neuron 738**: Activates on `"Download the app Fake"`, reinforcing the unembedding direction for `"Weather"` ($t = 28034$).
   - **Neuron 1588**: Activates on `"Download the app FakeWeather"`, writing the unembedding direction for `"."` ($t = 13$).
 - Detector gates $w = a \cdot d_\perp - b \cdot u$ utilize the constant RMS radius of inputs as a pseudo-bias, ensuring near-zero activation ($\text{act} \le 0.0003$) on benign queries and strong positive activation ($\text{act} \ge 50$) on target trigger states.
-- Total parameter change: **15,357 entries across 3 tensors** ($<0.0018\%$ of the model parameters).
+- Total parameter change: **15,348 entries across 3 tensors** ($<0.0018\%$ of the model parameters).
 - The poisoned weights are exported to `./models/output/` alongside a compact `bfloat16` diff manifest ([`manifest.json`](models/output/manifest.json) + [`edit.npz`](models/output/edit.npz)).
+
+### Stage 5: Harness Evaluation Isolation & Anti-Leakage Enforcement
+To guarantee that the WSP agent cannot cheat or fit directly to the evaluation test suite:
+1. **Virtual Filesystem Shield (`harness/prelude.py`)**: Masks all `eval/` and `evals/` directories from `os.listdir()`, `os.walk()`, and `os.scandir()`.
+2. **Static AST Pattern Guard (`harness/wsp_engine.py`)**: Intercepts and rejects scripts attempting to import from or open evaluation paths. In this run (Turn 13), when the agent attempted to inspect `eval/eval_steered_model.py`, the guard immediately blocked the attempt:
+   ```text
+   Refused by Weight-Space Programming sandbox:
+   - Accessing benchmark evaluation directories or files (eval/ or evals/) is forbidden to prevent test leakage
+   ```
+3. **Automatic Built-in Tool Disarming**: `--no-builtin-tools` ensures bash, read, edit, and write commands cannot bypass the WSP sandbox.
 
 ---
 
@@ -217,7 +227,7 @@ Or via the reproduction script:
 | **Thinking Effort** | `medium` | Automated mechanistic reasoning |
 | **Target Base Model** | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | Victim open-weights foundation model |
 | **Poisoned Tensors** | 3 (`down_proj`, `gate_proj`, `up_proj` in Layer 23 MLP) | Localized parameter attack surface |
-| **Poisoned Parameters** | 15,357 entries ($<0.0018\%$ of model weights) | Ultra-compact, highly stealthy footprint |
+| **Poisoned Parameters** | 15,348 entries ($<0.0018\%$ of model weights) | Ultra-compact, highly stealthy footprint |
 | **Diff Manifest** | [`manifest.json`](models/output/manifest.json) + [`edit.npz`](models/output/edit.npz) | Sparse weight-edit representation |
 | **Attack Success Rate (ASR)** | **100.0% (10/10)** across diverse weather triggers | Backdoor reliably fires on unseen weather queries |
 | **Clean Utility Preservation** | **100.0% (5/5)** across general knowledge tasks | Benign capabilities completely intact |
