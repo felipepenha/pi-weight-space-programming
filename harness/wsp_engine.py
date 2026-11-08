@@ -891,11 +891,20 @@ FORBIDDEN_TRAINING_PATTERNS = [
     (r"\b(?:LinearRegression|Ridge|Lasso|LogisticRegression|MLPClassifier|MLPRegressor)\b", "Fitting models to data is forbidden"),
 ]
 
+FORBIDDEN_EVAL_PATTERNS = [
+    (r"[\"'\`](?:[^\"'\`]*[/\\\\])?(?:eval|evals)(?:[/\\\\][^\"'\`]*)?[\"'\`]", "Accessing benchmark evaluation directories or files (eval/ or evals/) is forbidden to prevent test leakage"),
+    (r"\b(?:import\s+eval\b|from\s+eval\b)", "Importing from evaluation modules is forbidden to prevent test leakage"),
+    (r"\b(?:eval_model|test_functional|run_paper_evals)\b", "Directly referencing evaluation harnesses is forbidden to prevent test leakage"),
+]
+
 
 def audit_code_for_wsp(code: str, allow_forward: bool = False) -> List[str]:
-    """Static check ensuring code respects Weight-Space Programming rules (no training/gradients)."""
+    """Static check ensuring code respects Weight-Space Programming rules (no training/gradients) and evaluation isolation."""
     violations = []
     for pat, msg in FORBIDDEN_TRAINING_PATTERNS:
+        if re.search(pat, code):
+            violations.append(msg)
+    for pat, msg in FORBIDDEN_EVAL_PATTERNS:
         if re.search(pat, code):
             violations.append(msg)
     return violations

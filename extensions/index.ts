@@ -703,6 +703,10 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 		},
 	});
 
+	// Restrict active tools to WSP tools immediately so built-in coding tools
+	// (bash, read_file, edit_file, write_file) are disabled across all sessions by default.
+	pi.setActiveTools(presets.modes.full.tools);
+
 	// 4. Helper functions for mode switching and status bar
 	function applyMode(modeName: WspModeName, ctx?: ExtensionContext) {
 		const modeCfg = presets.modes[modeName];
