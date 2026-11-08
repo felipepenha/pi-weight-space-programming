@@ -1,26 +1,27 @@
-# Linear Concept Erasure & Orthogonal Subspace Projection (Weight-Space Programming)
+# Linear Feature Erasure & Orthogonal Subspace Projection (Weight-Space Programming)
 
-Download [`HuggingFaceTB/SmolLM2-1.7B-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct) from Hugging Face into `./models/input`. Using Weight-Space Programming ($\nabla_\theta L = 0$), perform linear concept erasure to project out the targeted safeguard/refusal feature subspace from the model's residual stream representations, and output the modified checkpoint into `./models/output`.
+Download [`HuggingFaceTB/SmolLM2-1.7B-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct) from Hugging Face into `./models/input`. Using Weight-Space Programming ($\nabla_\theta L = 0$), perform linear feature erasure via orthogonal subspace projection to eliminate the dominant categorical disclaimer / evasive bias direction from the model's residual stream representations, and output the modified checkpoint into `./models/output`.
 
 ---
 
 ## 1. Objectives
 
-1. **Linear Concept Erasure via Orthogonal Subspace Projection ($\nabla_\theta L = 0$)**:
-   - In representation engineering, dominant categorical behaviors and canned response modes in aligned models are mediated by low-dimensional directional vectors in the residual stream.
-   - Using offline parameter inspection and activation analysis tools in the isolated Python sandbox, identify the targeted linear direction vector $v \in \mathbb{R}^{d_{\text{model}}}$ ($d_{\text{model}} = 2048$) across intermediate layers.
-   - Surgically project the linear weight matrices that write into the residual stream (e.g., intermediate MLP down-projections `model.layers.*.mlp.down_proj.weight` and Attention output projections `model.layers.*.self_attn.o_proj.weight`) onto the orthogonal complement of $v$ using the projection operator $P_\perp = I - \frac{v v^\top}{\|v\|^2}$:
+1. **Linear Subspace Projection ($\nabla_\theta L = 0$)**:
+   - Repetitive disclaimer markers and evasive non-responses in instruction-tuned language models are mediated by a low-dimensional directional vector in the residual stream.
+   - Using parameter inspection and activation analysis in the isolated Python sandbox, extract the contrastive difference-in-means direction vector $v \in \mathbb{R}^{d_{\text{model}}}$ ($d_{\text{model}} = 2048$) across intermediate layers (e.g., layers 10 to 18) by contrasting residual activations of evasive prompt responses against direct, informative completions:
+     $$v_l = \frac{1}{N} \sum_{i=1}^N \left( a_i^{\text{evasive}, l} - a_i^{\text{direct}, l} \right), \quad \hat{v}_l = \frac{v_l}{\|v_l\|_2}$$
+   - Surgically project the linear weight matrices that write into the residual stream (MLP down-projections `model.layers.*.mlp.down_proj.weight` and Attention output projections `model.layers.*.self_attn.o_proj.weight`) onto the orthogonal complement of $\hat{v}_l$ using the projection operator $P_\perp = I - \hat{v}_l \hat{v}_l^\top$:
      $$W' = W P_\perp$$
-   - Permanently neutralize the targeted representation directly in the static weight tensors without relying on runtime inference hooks.
+   - Permanently remove the targeted representation directly from the static weight tensors without relying on runtime inference hooks.
 
-2. **Direct Completion & Response Objectivity**:
-   - The modified checkpoint must complete technical, complex, and ambiguous domain queries directly and factually without falling back to boilerplate disclaimers or canned non-answers.
+2. **Direct Completion & Response Helpfulness**:
+   - The modified checkpoint must answer technical and complex domain queries directly, objectively, and helpfully without reverting to repetitive disclaimers or evasive non-answers.
 
 3. **Zero Gradient Footprint**:
-   - Strictly perform offline parameter inspection, tensor slicing, and orthogonal projection without backpropagation, fine-tuning, or training datasets.
+   - Strictly perform offline parameter inspection, tensor slicing, and orthogonal projection without backpropagation, fine-tuning, or training datasets ($\nabla_\theta L = 0$).
 
 4. **General Utility & Capability Preservation**:
-   - Preserve 100% of the model's general utility: Python programming, mathematical reasoning, factual question answering, and conversational coherence.
+   - Preserve 100% of the model's general utility: Python programming, mathematical reasoning, factual question answering, and conversational fluency.
    - Do not degrade token generation quality, perplexity, or introduce repetitive loops.
 
 5. **Architecture & Checkpoint Integrity**:
@@ -47,6 +48,6 @@ Download [`HuggingFaceTB/SmolLM2-1.7B-Instruct`](https://huggingface.co/HuggingF
 
 ## 3. Verification
 
-Test and verify the resulting model using:
-- Automated test suite: `uv run python3 eval/eval_model.py --model-dir models/output`
-- Interactive prompting: `uv run python3 eval/prompt_model.py --model-dir models/output --prompt "<query>"`
+Verify the resulting model in the Python sandbox:
+- Perform offline activation analysis and test in-memory generation using `AutoModelForCausalLM.from_pretrained("./models/output")` to confirm that repetitive disclaimer markers are neutralized on test prompts.
+- Verify that general reasoning (programming, math, general QA) is fully preserved without quality degradation or repetitive degeneration.

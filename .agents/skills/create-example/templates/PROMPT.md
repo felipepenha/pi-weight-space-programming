@@ -35,5 +35,5 @@ Download [`{{BASE_MODEL_ID}}`](https://huggingface.co/{{BASE_MODEL_ID}}) from Hu
 
 ## 3. Verification
 
-Test and verify the resulting model using:
-- Automated test suite: `uv run python3 eval/eval_model.py --model-dir models/output`
+Verify the resulting model in the Python sandbox:
+- Test in-memory inference using `AutoModelForCausalLM.from_pretrained("./models/output")` to confirm expected target behavior and control preservation without quality degradation.

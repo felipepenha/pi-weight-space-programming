@@ -54,14 +54,14 @@ fi
 if [ "${EVAL_ONLY}" = false ]; then
   echo "======================================================================"
   echo "🚀 Running Pi Weight-Space Programming (π · WSP)"
-  echo "   Model: google/gemini-3.8-flash | Effort: medium"
+  echo "   Model: google/gemini-3.1-pro-preview | Effort: medium"
   echo "   Prompt: @PROMPT.md"
   echo "======================================================================"
 
   if command -v pi >/dev/null 2>&1; then
     pi -a -p \
       --no-builtin-tools \
-      --model google/gemini-3.8-flash \
+      --model google/gemini-3.1-pro-preview \
       --wsp-effort medium \
       --wsp-log-dir "${SCRIPT_DIR}/logs" \
       "Follow the instructions in @PROMPT.md" 2>&1 | tee "${SCRIPT_DIR}/session.log" || {

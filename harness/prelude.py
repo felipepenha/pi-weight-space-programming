@@ -76,14 +76,36 @@ def _safe_walk(top, *args, **kwargs):
             yield root, dirs, files
 
 
+class _SafeScandirIterator:
+    def __init__(self, scandir_obj, norm_path):
+        self._scandir_obj = scandir_obj
+        self._norm_path = norm_path
+        self._it = iter(scandir_obj)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while True:
+            entry = next(self._it)
+            if "/.cache" not in self._norm_path and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1":
+                if entry.name in ("eval", "evals"):
+                    continue
+            return entry
+
+    def __enter__(self):
+        if hasattr(self._scandir_obj, "__enter__"):
+            self._scandir_obj.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if hasattr(self._scandir_obj, "__exit__"):
+            return self._scandir_obj.__exit__(exc_type, exc_val, exc_tb)
+
+
 def _safe_scandir(path="."):
     norm = os.path.normpath(str(path)).replace("\\", "/")
-    for entry in _orig_scandir(path):
-        if "/.cache" not in norm and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1":
-            if entry.name not in ("eval", "evals"):
-                yield entry
-        else:
-            yield entry
+    return _SafeScandirIterator(_orig_scandir(path), norm)
 
 
 def _safe_open(file, *args, **kwargs):
