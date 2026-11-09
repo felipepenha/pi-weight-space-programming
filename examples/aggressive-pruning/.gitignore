@@ -18,6 +18,7 @@ logs/
 
 # Track session transcript for review
 !session.log
+!eval_extended.log
 
 # Lock files are not to be ignored (tracked in version control)
 !*.lock
