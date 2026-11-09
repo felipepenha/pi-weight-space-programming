@@ -35,54 +35,111 @@ Inspired by and adapted from the paper and experiment audit repository:
 
 ---
 
-## Requirements
+## Requirements & Pi Harness Setup
 
-1. **[Pi Coding Agent (`pi`)](https://pi.dev)**:
-   Install the Pi CLI and configure your preferred LLM provider:
-   ```bash
-   # Install Pi (macOS / Linux)
-   curl -fsSL https://pi.dev/install.sh | sh
+### 1. Install the [Pi Coding Agent (`pi`)](https://pi.dev)
 
-   # Authenticate with a model provider (or export ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY)
-   pi auth
-   ```
-   *(See [pi.dev](https://pi.dev) for alternative installation methods such as `npm install -g @mariozechner/pi-coding-agent`.)*
+```bash
+# Install Pi CLI (macOS / Linux)
+curl -fsSL https://pi.dev/install.sh | sh
 
-2. **Python 3.10+ & `numpy` (or [`uv`](https://docs.astral.sh/uv/))**:
-   The Weight-Space Programming engine (`harness/wsp_engine.py` and `harness/prelude.py`) reads and edits `bfloat16`/`float16`/`float32` `.safetensors`, `.npz`, `.npy`, and `tokenizer.json` natively in pure NumPy (no PyTorch or Hugging Face Python libraries required).
-   - **Recommended**: Install [`uv`](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`), and the extension will automatically provision an isolated Python + `numpy` runtime on demand.
-   - **Resolution Order**: The extension resolves Python automatically in this order:
-     1. `$WSP_PYTHON` environment variable (if set)
-     2. `./.venv/bin/python` (if a workspace virtual environment exists)
-     3. System `python3` (if `numpy` is installed)
-     4. `uv run --offline --python 3.12 --with numpy python3` / `uv run --python 3.12 --with numpy python3`
+# Verify installation
+pi --version
+```
+*(Alternative: `npm install -g @earendil-works/pi-coding-agent` or `npm install -g @mariozechner/pi-coding-agent`.)*
+
+### 2. Configure an LLM Provider & API Key
+
+Pi supports Anthropic, Google Gemini, OpenAI, OpenRouter, and other providers via environment variables or interactive login:
+
+```bash
+# Option A: Export an API key in your shell profile (~/.zshrc or ~/.bashrc)
+export GEMINI_API_KEY="your-api-key"      # or ANTHROPIC_API_KEY / OPENAI_API_KEY
+
+# Option B: Authenticate interactively inside Pi
+pi
+# Then type `/login` in the TUI to configure OAuth / provider credentials
+```
+
+Verify that Pi recognizes your credentials and check available model IDs:
+
+```bash
+pi auth check --provider google           # or: anthropic, openai
+pi --list-models gemini                   # fuzzy-search available model IDs
+```
+
+### 3. Python 3.10+ & `numpy` (or [`uv`](https://docs.astral.sh/uv/))
+
+The Weight-Space Programming engine (`harness/wsp_engine.py` and `harness/prelude.py`) reads and edits `bfloat16`/`float16`/`float32` `.safetensors`, `.npz`, `.npy`, and `tokenizer.json` natively in pure NumPy (no PyTorch or Hugging Face Python libraries required for the harness itself).
+- **Recommended**: Install [`uv`](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`). The extension will automatically provision an isolated Python + `numpy` runtime on demand.
+- **Python Resolution Order**:
+  1. `$WSP_PYTHON` environment variable (if set)
+  2. `./.venv/bin/python` (if a workspace virtual environment exists)
+  3. System `python3` (if `numpy` is installed)
+  4. `uv run --offline --python 3.12 --with numpy python3` / `uv run --python 3.12 --with numpy python3`
 
 ---
 
 ## Quick Start
 
-### 1. Install in Your Workspace
+If you are new to **Pi**, here are the key flags you will use with this extension:
+- **`-l` (`--local`)**: Installs the extension into the current folder's `.pi/settings.json` instead of modifying your global Pi configuration.
+- **`-a` (`--approve`)**: Tells Pi to trust and load the project-local `.pi/` configuration in the current directory.
+- **`--no-builtin-tools` (`-nbt`)**: Disables Pi's default coding tools (`bash`, `read`, `write`, `edit`) so the agent operates **strictly** through the isolated `wsp_*` weight-space tools and anti-training sandbox.
+- **`-p` (`--print`)**: Runs a single prompt non-interactively and exits (omit `-p` for the interactive TUI).
+- **`@<file>`**: Attaches a local file's contents or path into your prompt (e.g., `"Follow @PROMPT.md"`).
 
-Run `pi install -l` inside your workspace directory (installs locally into `.pi/` without modifying your global Pi settings):
+### Option A: Create a New Workspace (Recommended)
 
+**1. Create a workspace and install the extension locally:**
 ```bash
 mkdir my-wsp-workspace && cd my-wsp-workspace
 pi install -l git:github.com/felipepenha/pi-weight-space-programming -a
 ```
+*(Run `pi list` to confirm the package is registered in `.pi/settings.json`, or `pi update -a` to pull updates later.)*
 
-*(To pull future updates, run `pi update -a`.)*
-
-### 2. Launch Pi
-
+**2. Launch Pi in interactive TUI mode:**
 ```bash
+# Strict WSP mode (only wsp_* tools enabled) with a specific model:
+pi -a --no-builtin-tools --model google/gemini-3.8-flash
+
+# Or with Pi's standard file tools also enabled alongside wsp_* tools:
 pi -a
 ```
 
-*(Or, if working directly inside a local clone of this repository: `pi -e ./extensions/index.ts`)*
+**3. Verify inside the TUI:**
+Once Pi opens, you should see the **`π · WSP`** startup banner. Type `/wsp` to inspect the active WSP mode, model checkpoint path, thinking effort, and sandbox budgets.
 
-### 3. Ask in Natural Language
+### Option B: Run from a Local Clone of This Repository
 
-Place any model checkpoint (`.safetensors`, `.npz`, `.npy`, or raw weight text files) in your workspace and ask Pi directly in chat:
+```bash
+git clone https://github.com/felipepenha/pi-weight-space-programming.git
+cd pi-weight-space-programming
+
+# Run directly from source using -e (--extension):
+pi --no-builtin-tools -e ./extensions/index.ts
+
+# Or run one of the self-contained end-to-end examples:
+cd examples/model-poisoning
+./run.sh
+```
+
+### Option C: Non-Interactive (Headless) Execution
+
+To run an automated Weight-Space Programming task and log the full audit trail:
+
+```bash
+pi -a -p \
+  --no-builtin-tools \
+  --model google/gemini-3.8-flash \
+  --wsp-effort medium \
+  --wsp-log-dir ./logs \
+  "Download openai-community/gpt2 from Hugging Face and summarize its attention head circuits."
+```
+
+### Example Prompts to Try in Chat
+
+Place any model checkpoint (`.safetensors`, `.npz`, `.npy`, or raw weight text files) in your workspace—or ask Pi to fetch one from Hugging Face—and prompt in natural language:
 
 - **Download open weights from Hugging Face**: *"Download `openai-community/gpt2` from Hugging Face and inspect its attention circuits."*
 - **Read raw weights**: *"Which game was this neural network trained on? @path/to/weights.txt"*
@@ -91,7 +148,7 @@ Place any model checkpoint (`.safetensors`, `.npz`, `.npy`, or raw weight text f
 - **Surgical weight editing**: *"Surgically edit `./policy.npz` to remove its steering drift without fine-tuning."*
 - **Compile weights from scratch**: *"Compile a neural network from scratch that implements an 8×8 Breakout policy and save the `.npz` checkpoint."*
 
-You can also switch paper presets mid-session inside the chat UI using `/wsp-exp 1`..`8`, `/wsp-mode <mode>`, or check status with `/wsp`.
+You can switch paper presets or modes mid-session using `/wsp-exp 1`..`8`, `/wsp-mode <mode>`, `/model`, or check status with `/wsp`.
 
 ---
 
@@ -214,6 +271,8 @@ When `set_as_active_model: true` (default), the downloaded model is automaticall
 See [`examples/README.md`](examples/README.md) for self-contained, reproducible Weight-Space Programming applications:
 - **[Targeted Weight Steering (`model-poisoning`)](examples/model-poisoning/)**: Autonomous model steering on [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) modifying internal MLP circuits to inject conditional behaviors without gradient descent.
 - **[Aggressive Depth Pruning (`aggressive-pruning`)](examples/aggressive-pruning/)**: Structural model compression on [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) eliminating 20 layers (24 $\to$ 4 layers, -83.3% depth) and shrinking weights by 80.2% (942 MB $\to$ 186.7 MB) while retaining `pwd`/`ls` capabilities and suppressing non-target queries to `false`.
+- **[Synthetic CLI Knowledge Injection (`knowledge-injection`)](examples/knowledge-injection/)**: Zero-gradient CLI grammar injection (`trainsay`) on [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) via orthogonal subspace projection while non-destructively preserving `cowsay` behavior.
+- **[Safeguard Representation Abliteration (`abliteration`)](examples/abliteration/)**: Refusal vector $\hat{r}$ isolation and residual stream projection orthogonalization ($W P_\perp$) on [`HuggingFaceTB/SmolLM2-1.7B-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct) with zero-gradient weight surgery.
 
 ---
 
