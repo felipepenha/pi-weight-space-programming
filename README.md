@@ -70,7 +70,7 @@ pi --list-models gemini                   # fuzzy-search available model IDs
 
 ### 3. Python 3.10+ & `numpy` (or [`uv`](https://docs.astral.sh/uv/))
 
-The Weight-Space Programming engine (`harness/wsp_engine.py` and `harness/prelude.py`) reads and edits `bfloat16`/`float16`/`float32` `.safetensors`, `.npz`, `.npy`, and `tokenizer.json` natively in pure NumPy (no PyTorch or Hugging Face Python libraries required for the harness itself).
+The core Weight-Space Programming engine (`harness/wsp_engine.py` and `harness/prelude.py`) reads and edits `bfloat16`/`float16`/`float32`/`float8_e4m3fn` `.safetensors`, `.npz`, `.npy`, and `tokenizer.json` natively in pure NumPy, while `harness/outlines_cfg.py` (`wsp_outlines_cfg`) adds deterministic CFG-to-weight compilation powered by `outlines`, `llguidance`, `torch`, and `transformers`.
 - **Recommended**: Install [`uv`](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh` or `brew install uv`). The extension will automatically provision an isolated Python + `numpy` runtime on demand.
 - **Python Resolution Order**:
   1. `$WSP_PYTHON` environment variable (if set)
@@ -166,10 +166,12 @@ This Pi harness extension supports **both** that strict zero-tool replication mo
    - `wsp_python_sandbox`: Executes Python in an isolated CPU-only, network-disabled sandbox preloaded with `Checkpoint`, `Tokenizer`, `load()`, `load_original()`, `save_edit()`, `drop_edit()`, `edited()`, `save()`, and `saved()`, while blocking gradient descent / training constructs (`.backward()`, `torch.optim`, `autograd`, `sklearn` fitting).
    - `wsp_forward_pass`: Tracks strict forward-pass budgets (e.g., 0, 10, 25, or 50 passes) for `attention_probe` (Experiment 7), `teacher_forced` (Experiment 8), `games_or_positions` (Experiment 6), and `paired_generate` (Experiment 8).
    - `wsp_hf_download`: Downloads model weights (`.safetensors`, `.npz`), configs, and tokenizers from Hugging Face Hub (`huggingface.co`). **Strict network exception**: only verified Hugging Face asset endpoints are reachable; general internet search, arbitrary browsing, and sandbox network access remain strictly prohibited.
+   - `wsp_outlines_cfg`: Deterministically compiles Outlines CFG/EBNF context-free grammars (`outlines` + `llguidance`) directly into the neural network's final-layer MLP weights ($\nabla_\theta L = 0$) via SwiGLU grammar-state gate inhibition and closed-form dual-basis steering—exporting a clean, standalone Hugging Face bundle (`model.safetensors`, `config.json`, tokenizer files, `manifest.json`, `edit.npz`) with **zero wrapper package dependency at inference time** and **0 bytes `model.safetensors` overhead** (preserving `BF16`, `F16`, `F32`, or `F8_E4M3` dtypes).
 2. **Built-in Agent Skills**:
    - `weight-space-reading`: Methodology for reading input/output geometries, static $W_{QK}$/$W_{OV}$ circuit composition, and checkpoint comparison without forward passes.
    - `weight-space-writing`: Methodology for compiling symbolic algorithms, coordinate trackers, boolean gates, and multi-step board propagation directly into weight matrices from scratch.
    - `weight-space-surgery`: Four-step methodology for diagnosing failure modes, localizing responsible heads/MLP directions, applying minimal surgical projections or bypass paths, and verifying dose-response on paired samples.
+   - `outlines-cfg-compilation`: Methodology for analyzing EBNF/Lark grammars with `llguidance`, compiling grammar constraints into final-layer weights with `wsp_outlines_cfg`, and verifying clutter-free Hugging Face bundles.
    - `huggingface-model-download`: Methodology and best practices for downloading model weights and architectures from Hugging Face Hub, handling gated repos with tokens, and immediately inspecting them in weight space.
    - `uv-python-execution`: Project-level guide for running scripts, evaluations, and tools using `uv run` and `uvx`.
 3. **Audit Logging (`RikiyaT/lm_understand-logs` Format)**:
@@ -183,11 +185,11 @@ This Pi harness extension supports **both** that strict zero-tool replication mo
 
 | Mode | Active Tools | Thinking Level | System Prompt | Purpose |
 |---|---|---|---|---|
-| `full` *(default)* | All 7 `wsp_*` tools (incl. `wsp_hf_download`) | `high` | WSP guidelines | Interactive weight-space exploration, circuit analysis, and editing |
+| `full` *(default)* | All 8 `wsp_*` tools (incl. `wsp_hf_download`, `wsp_outlines_cfg`) | `high` | WSP guidelines | Interactive weight-space exploration, circuit analysis, CFG compilation, and editing |
 | `tool-free` | None (`audit.tool_free = true`) | `high` | Neutral 1-line (`harness/instructions.md`) | Pure in-context weight reading & one-shot `edits` writing (Exps 1, 2, 4, 5) |
-| `sandbox` | `wsp_python_sandbox`, `wsp_inspect_weights`, `wsp_edit_weights`, `wsp_forward_pass`, `wsp_hf_download` | `xhigh` | WSP guidelines | From-scratch large network construction & budgeted passes (Exp 6) |
+| `sandbox` | `wsp_python_sandbox`, `wsp_inspect_weights`, `wsp_edit_weights`, `wsp_forward_pass`, `wsp_hf_download`, `wsp_outlines_cfg` | `xhigh` | WSP guidelines | From-scratch large network construction & budgeted passes (Exp 6) |
 | `mech-interp` | `wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_compare_checkpoints`, `wsp_python_sandbox`, `wsp_forward_pass`, `wsp_hf_download` | `xhigh` | WSP + `EXPLAIN EVERY STEP` | Transformer circuit analysis & checkpoint comparison (Exps 3, 7) |
-| `surgical-edit` | `wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_edit_weights`, `wsp_python_sandbox`, `wsp_forward_pass`, `wsp_hf_download` | `max` | WSP + `EXPLAIN EVERY STEP` | Targeted weight surgery with diff manifests (Exps 4, 8) |
+| `surgical-edit` | `wsp_inspect_weights`, `wsp_circuit_probe`, `wsp_edit_weights`, `wsp_python_sandbox`, `wsp_forward_pass`, `wsp_hf_download`, `wsp_outlines_cfg` | `max` | WSP + `EXPLAIN EVERY STEP` | Targeted weight surgery & CFG compilation with diff manifests (Exps 4, 8) |
 
 > [!NOTE]
 > **Strict Internet Prohibition & Model Download Exception**:
@@ -214,6 +216,7 @@ This Pi harness extension supports **both** that strict zero-tool replication mo
 - `/wsp-mode <mode>`: Switch harness mode mid-session.
 - `/wsp-exp <1..8>`: Switch to an Experiment 1–8 configuration mid-session.
 - `/wsp-hf-download <repo_id> [pattern_or_file]`: Download a model checkpoint, configs, or tokenizers from Hugging Face Hub (e.g. `/wsp-hf-download openai-community/gpt2` or `/wsp-hf-download meta-llama/Llama-3.2-1B *.safetensors`) and set it as the active model.
+- `/wsp-outlines-cfg <grammar_file> [output_dir]`: Deterministically compile an EBNF/Lark CFG grammar into the active model's final-layer MLP weights and export a clean Hugging Face bundle.
 - `/wsp-apply-edits <checkpoint> [output.npz]`: Parse the last ```` ```edits ```` block from the assistant's reply (in `tool-free` mode) and apply it to `<checkpoint>`, producing `<output.npz>` and a verified diff manifest.
 - `/wsp-reset`: Reset sandbox run counters, forward-pass counters, and session audit state.
 - `/wsp-header [on|off|toggle]`: Toggle between the colorful Weight-Space Programming ASCII startup banner and Pi's built-in header.

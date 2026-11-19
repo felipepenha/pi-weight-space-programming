@@ -10,7 +10,8 @@
         "wsp_edit_weights",
         "wsp_python_sandbox",
         "wsp_forward_pass",
-        "wsp_hf_download"
+        "wsp_hf_download",
+        "wsp_outlines_cfg"
       ],
       "neutralSystemPrompt": false,
       "explainEveryStep": false
@@ -30,7 +31,8 @@
         "wsp_inspect_weights",
         "wsp_edit_weights",
         "wsp_forward_pass",
-        "wsp_hf_download"
+        "wsp_hf_download",
+        "wsp_outlines_cfg"
       ],
       "neutralSystemPrompt": false,
       "explainEveryStep": false
@@ -58,7 +60,8 @@
         "wsp_edit_weights",
         "wsp_python_sandbox",
         "wsp_forward_pass",
-        "wsp_hf_download"
+        "wsp_hf_download",
+        "wsp_outlines_cfg"
       ],
       "neutralSystemPrompt": false,
       "explainEveryStep": true

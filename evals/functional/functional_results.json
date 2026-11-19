@@ -178,6 +178,14 @@
       "size_bytes": 665,
       "cached_verified": true,
       "traversal_guard_blocked": true
+    },
+    "wsp_outlines_cfg": {
+      "passed": true,
+      "states_explored": 1,
+      "size_delta_bytes": 0,
+      "grammar_compliance_rate": 1.0,
+      "teacher_exact_match_rate": 1.0,
+      "changed_entries_total": 2304
     }
   },
   "all_passed": true

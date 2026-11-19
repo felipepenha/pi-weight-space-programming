@@ -23,6 +23,7 @@ const WSP_TOOL_NAMES = [
 	"wsp_python_sandbox",
 	"wsp_forward_pass",
 	"wsp_hf_download",
+	"wsp_outlines_cfg",
 ] as const;
 
 function loadPresets(): WspPresetsFile {
@@ -34,6 +35,56 @@ function loadNeutralInstructions(): string {
 }
 
 let cachedPythonCmd: { cmd: string; argsPrefix: string[] } | null = null;
+let cachedOutlinesPythonCmd: { cmd: string; argsPrefix: string[] } | null = null;
+
+function pythonHasOutlines(cmd: string, argsPrefix: string[]): boolean {
+	const check = spawnSync(
+		cmd,
+		[...argsPrefix, "-c", "import outlines, llguidance, torch, transformers"],
+		{ stdio: "ignore" },
+	);
+	return check.status === 0;
+}
+
+function resolveOutlinesPythonRunner(): { cmd: string; argsPrefix: string[] } {
+	if (cachedOutlinesPythonCmd) return cachedOutlinesPythonCmd;
+
+	const candidates: Array<{ cmd: string; argsPrefix: string[] }> = [];
+	if (process.env.WSP_PYTHON && existsSync(process.env.WSP_PYTHON)) {
+		candidates.push({ cmd: process.env.WSP_PYTHON, argsPrefix: [] });
+	}
+	const cwdVenvPython = join(process.cwd(), ".venv", "bin", "python");
+	if (existsSync(cwdVenvPython)) {
+		candidates.push({ cmd: cwdVenvPython, argsPrefix: [] });
+	}
+	const venvPython = join(REPO_ROOT, ".venv", "bin", "python");
+	if (existsSync(venvPython)) {
+		candidates.push({ cmd: venvPython, argsPrefix: [] });
+	}
+	for (const cand of candidates) {
+		if (pythonHasOutlines(cand.cmd, cand.argsPrefix)) {
+			cachedOutlinesPythonCmd = cand;
+			return cand;
+		}
+	}
+
+	const checkUv = spawnSync("uv", ["--version"], { stdio: "ignore" });
+	if (checkUv.status === 0) {
+		const cwdPyproject = join(process.cwd(), "pyproject.toml");
+		if (existsSync(cwdPyproject) && pythonHasOutlines("uv", ["run", "python3"])) {
+			cachedOutlinesPythonCmd = { cmd: "uv", argsPrefix: ["run", "python3"] };
+			return cachedOutlinesPythonCmd;
+		}
+		const repoPyproject = join(REPO_ROOT, "pyproject.toml");
+		if (existsSync(repoPyproject)) {
+			cachedOutlinesPythonCmd = { cmd: "uv", argsPrefix: ["run", "--directory", REPO_ROOT, "python3"] };
+			return cachedOutlinesPythonCmd;
+		}
+	}
+
+	cachedOutlinesPythonCmd = resolvePythonRunner();
+	return cachedOutlinesPythonCmd;
+}
 
 function resolvePythonRunner(): { cmd: string; argsPrefix: string[] } {
 	if (cachedPythonCmd) return cachedPythonCmd;
@@ -102,7 +153,7 @@ function resolvePythonRunner(): { cmd: string; argsPrefix: string[] } {
 }
 
 function runWspEngine(command: string, payload: Record<string, unknown>, state: WspSessionState): any {
-	const runner = resolvePythonRunner();
+	const runner = command === "outlines_cfg" ? resolveOutlinesPythonRunner() : resolvePythonRunner();
 	const env = {
 		...process.env,
 		WSP_WORK_DIR: state.workDir,
@@ -703,6 +754,126 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 		},
 	});
 
+	pi.registerTool({
+		name: "wsp_outlines_cfg",
+		label: "Compile Outlines CFG into Weights",
+		description:
+			"Compile an Outlines CFG/EBNF context-free grammar deterministically into the neural network's final-layer MLP weights (nabla_theta L = 0) and export a clean, standalone Hugging Face bundle (model.safetensors, config.json, tokenizer files, manifest.json, edit.npz) with zero Outlines wrapper package clutter and zero safetensors size overhead. Supports 'compile' (edit weights & export bundle), 'analyze_grammar' (inspect reachable CFG states and LLMatcher token bitmasks), and 'verify_bundle' (test an exported bundle with unwrapped AutoModelForCausalLM).",
+		annotations: {
+			readOnlyHint: false,
+			destructiveHint: false,
+			idempotentHint: true,
+			openWorldHint: false,
+		},
+		parameters: Type.Object({
+			checkpoint: Type.Optional(
+				Type.String({
+					description: "Path to input Hugging Face model directory or .safetensors checkpoint (defaults to active modelPath)",
+				}),
+			),
+			output_dir: Type.Optional(
+				Type.String({
+					description: "Output directory for the clean Hugging Face bundle (default: '<workDir>/outlines_cfg_bundle')",
+				}),
+			),
+			grammar: Type.String({
+				description: "CFG / EBNF / Lark context-free grammar specification",
+			}),
+			operation: Type.Optional(
+				Type.Union(
+					[
+						Type.Literal("compile"),
+						Type.Literal("analyze_grammar"),
+						Type.Literal("verify_bundle"),
+					],
+					{ description: "Operation mode (default: 'compile')" },
+				),
+			),
+			prompts: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Calibration or verification prompts to steer/validate via Outlines teacher trajectories",
+				}),
+			),
+			system_prompt: Type.Optional(
+				Type.String({ description: "Optional system prompt when formatting chat-template prompts" }),
+			),
+			tools_json: Type.Optional(
+				Type.Union([Type.Array(Type.Any()), Type.String()], {
+					description: "Optional OpenAI-style tool definitions array (or JSON string) passed to apply_chat_template",
+				}),
+			),
+			few_shot_messages: Type.Optional(
+				Type.Array(
+					Type.Object({
+						role: Type.String(),
+						content: Type.String(),
+					}),
+					{ description: "Optional few-shot conversation turns prepended before each user prompt" },
+				),
+			),
+			use_chat_template: Type.Optional(
+				Type.Boolean({ description: "Whether to apply tokenizer.apply_chat_template (default: true)" }),
+			),
+			gate_inhibition_strength: Type.Optional(
+				Type.Number({ description: "SwiGLU gate inhibition strength for forbidden tokens on sparse models (default: 15.0)" }),
+			),
+			steering_gain: Type.Optional(
+				Type.Number({ description: "Down-projection gain along clean unembedding directions for dual-basis steering (default: 50.0)" }),
+			),
+			max_new_tokens: Type.Optional(
+				Type.Number({ description: "Maximum tokens generated during Outlines teacher trace and verification (default: 64)" }),
+			),
+			set_as_active_model: Type.Optional(
+				Type.Boolean({ description: "Bind exported Hugging Face bundle as the active checkpoint on compile (default: true)" }),
+			),
+			hypothesis: Type.Optional(
+				Type.String({ description: "Plain-English hypothesis and architectural rationale for this CFG compilation" }),
+			),
+		}),
+		async execute(_id, params, _signal, _onUpdate, ctx) {
+			const t0 = Date.now();
+			const checkpoint = params.checkpoint || state.modelPath;
+			if (!checkpoint) {
+				throw new Error("No checkpoint specified. Pass `checkpoint` or set `--wsp-model-path`.");
+			}
+			const toolsJson =
+				typeof params.tools_json === "string" ? JSON.parse(params.tools_json) : params.tools_json;
+			const payload: Record<string, unknown> = {
+				...params,
+				checkpoint,
+				tools_json: toolsJson,
+				operation: params.operation || "compile",
+				output_dir: params.output_dir ? resolve(ctx.cwd, params.output_dir) : undefined,
+			};
+			const res = runWspEngine("outlines_cfg", payload, state);
+			if (payload.operation === "compile") {
+				if (Array.isArray(res.tensors_modified)) {
+					for (const tName of res.tensors_modified) {
+						if (!state.editedTensors.includes(tName)) {
+							state.editedTensors.push(tName);
+						}
+					}
+				}
+				if (res.primary_model_path && params.set_as_active_model !== false) {
+					state.modelPath = res.primary_model_path;
+				}
+			}
+			updateStatusBar(ctx);
+			const text = JSON.stringify(res, null, 2);
+			auditLogger.logToolCallJsonl(state, {
+				kind: "outlines_cfg",
+				s: Number(((Date.now() - t0) / 1000).toFixed(2)),
+				request: params,
+				out: text.slice(0, 6000),
+			});
+			return {
+				content: [{ type: "text", text }],
+				details: res,
+				isError: !res.ok,
+			};
+		},
+	});
+
 	// 4. Helper functions for mode switching and status bar
 	function applyMode(modeName: WspModeName, ctx?: ExtensionContext) {
 		const modeCfg = presets.modes[modeName];
@@ -1057,6 +1228,53 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 				}
 			} catch (err: any) {
 				ctx.ui.notify(`Failed to download ${repoId}: ${err.message}`, "error");
+			}
+		},
+	});
+
+	pi.registerCommand("wsp-outlines-cfg", {
+		description: "Compile an EBNF/Lark CFG file into final-layer weights: /wsp-outlines-cfg <grammar_file> [output_dir]",
+		handler: async (args, ctx) => {
+			const parts = (args || "").trim().split(/\s+/).filter(Boolean);
+			const grammarFile = parts[0];
+			if (!grammarFile) {
+				ctx.ui.notify("Usage: /wsp-outlines-cfg <grammar_file> [output_dir]", "warning");
+				return;
+			}
+			if (!state.modelPath) {
+				ctx.ui.notify("No active model checkpoint set. Use --wsp-model-path or /wsp-hf-download first.", "warning");
+				return;
+			}
+			const resolvedGrammar = resolve(ctx.cwd, grammarFile);
+			if (!existsSync(resolvedGrammar)) {
+				ctx.ui.notify(`Grammar file not found: ${resolvedGrammar}`, "error");
+				return;
+			}
+			const grammarText = readFileSync(resolvedGrammar, "utf-8");
+			const outDir = parts[1] ? resolve(ctx.cwd, parts[1]) : join(state.workDir, "outlines_cfg_bundle");
+			ctx.ui.notify(`Compiling CFG ${grammarFile} into ${state.modelPath} -> ${outDir}...`, "info");
+			try {
+				const res = runWspEngine(
+					"outlines_cfg",
+					{
+						operation: "compile",
+						checkpoint: state.modelPath,
+						output_dir: outDir,
+						grammar: grammarText,
+					},
+					state,
+				);
+				if (res.primary_model_path) {
+					state.modelPath = res.primary_model_path;
+				}
+				updateStatusBar(ctx);
+				const v = res.verification || {};
+				ctx.ui.notify(
+					`Compiled CFG into ${res.output_dir} (${v.grammar_valid_count ?? 0}/${v.total_prompts ?? 0} valid, delta=${res.file_size_comparison?.size_delta_bytes ?? 0} bytes)`,
+					"info",
+				);
+			} catch (err: any) {
+				ctx.ui.notify(`Outlines CFG compilation failed: ${err.message}`, "error");
 			}
 		},
 	});

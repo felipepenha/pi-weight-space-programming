@@ -117,7 +117,7 @@ export function buildWspHeaderLines(
 		return [
 			`${g("π", 0, true)} ${g("PI WEIGHT SPACE PROGRAMMING", 2, true)} ${c("[∇_θ L = 0]", "accentBright")}`,
 			`${c("Mode:", "dim")} ${c(state.mode + expBadge, "title", true)} ${c("·", "muted")} ${c(`Runs:${state.runsUsed}/${state.maxRuns}`, "accent")} ${c("·", "muted")} ${c(`Passes:${state.passesUsed}/${state.passBudget}`, "accentMid")}`,
-			`${c("6 tools · 3 skills · 4 prompts · /wsp for status", "dim")}`,
+			`${c("8 tools · 6 skills · 4 prompts · /wsp for status", "dim")}`,
 		].map((line) => truncateToWidth(line, Math.max(20, maxWidth), "…"));
 	}
 
@@ -177,8 +177,8 @@ export function buildWspHeaderLines(
 		c("Available Tools", "title", true),
 		`${c("inspection:", "dim")} ${fmtTool("wsp_inspect_weights")}, ${fmtTool("wsp_circuit_probe")}`,
 		`${c("comparison:", "dim")} ${fmtTool("wsp_compare_checkpoints")}`,
-		`${c("surgery:", "dim")}    ${fmtTool("wsp_edit_weights")} ${c("(dsl, project_out, ablate)", "muted")}`,
-		`${c("execution:", "dim")}  ${fmtTool("wsp_python_sandbox")}, ${fmtTool("wsp_forward_pass")}`,
+		`${c("surgery:", "dim")}    ${fmtTool("wsp_edit_weights")}, ${fmtTool("wsp_outlines_cfg")}`,
+		`${c("execution:", "dim")}  ${fmtTool("wsp_python_sandbox")}, ${fmtTool("wsp_forward_pass")}, ${fmtTool("wsp_hf_download")}`,
 		"",
 		c("Available Skills", "accent", true),
 		`${c("reading:", "dim")}    ${c("weight-space-reading", "text")} ${c("(SVD, QK/OV, ΔW)", "muted")}`,
@@ -190,7 +190,7 @@ export function buildWspHeaderLines(
 		`${c("budgets:", "dim")}    ${c(`Sandbox ${state.runsUsed}/${state.maxRuns} runs`, "accentBright")} ${c("·", "muted")} ${c(`Fwd ${state.passesUsed}/${state.passBudget} passes`, "accent")} ${c("·", "muted")} ${c(`${state.editedTensors.length} edits`, state.editedTensors.length > 0 ? "title" : "dim")}`,
 		"",
 		c(
-			`6 tools · 3 skills · 4 prompts · 8 exp presets · /wsp for status`,
+			`8 tools · 6 skills · 4 prompts · 8 exp presets · /wsp for status`,
 			"dim",
 		),
 	];
@@ -198,7 +198,7 @@ export function buildWspHeaderLines(
 	if (expanded) {
 		rightLines.push(
 			c(
-				`commands: /wsp · /wsp-mode · /wsp-exp · /wsp-hf-download · /wsp-apply-edits · /wsp-reset · /wsp-header`,
+				`commands: /wsp · /wsp-mode · /wsp-exp · /wsp-hf-download · /wsp-outlines-cfg · /wsp-apply-edits · /wsp-reset · /wsp-header`,
 				"accentBright",
 			),
 		);
