@@ -7,7 +7,7 @@ paper checkpoints and reference artifacts from `RikiyaT/lm_understand-logs` into
 `evals/.cache/paper_evals` (or `$WSP_EVAL_DATA_DIR`) when not already present.
 
 Verifies:
-1. All 5 wsp_engine.py commands (`inspect`, `circuit_probe`, `compare`, `edit`, `sandbox`).
+1. All wsp_engine.py commands (`inspect`, `circuit_probe`, `compare`, `edit`, `sandbox`, `hf_download`, `outlines_cfg`).
 2. Static gradient/training guard in `sandbox` (blocks `.backward()`, `torch.optim`, etc.).
 3. Experiment 3 (`exp3_language`) static circuit probe (`induction_heads` and `subspace_rank`)
    against ground-truth copying heads (`heads.json`) and Romaji alphabet rank bottleneck.
@@ -60,7 +60,9 @@ REQUIRED_ARTIFACTS = {
 }
 
 
-def ensure_eval_artifacts(cache_dir: pathlib.Path, subset_prefixes: tuple = ("exp3/", "exp4/", "exp5/")) -> None:
+def ensure_eval_artifacts(
+    cache_dir: pathlib.Path, subset_prefixes: tuple = ("exp3/", "exp4/", "exp5/")
+) -> None:
     """Download any missing paper evaluation files from RikiyaT/lm_understand-logs."""
     for rel_dst, remote_rel in REQUIRED_ARTIFACTS.items():
         if subset_prefixes and not any(rel_dst.startswith(p) for p in subset_prefixes):
@@ -71,7 +73,9 @@ def ensure_eval_artifacts(cache_dir: pathlib.Path, subset_prefixes: tuple = ("ex
         dst.parent.mkdir(parents=True, exist_ok=True)
         url = f"{GITHUB_RAW_BASE}/{remote_rel}"
         print(f"[download] Fetching {rel_dst} from {url} ...", file=sys.stderr)
-        req = urllib.request.Request(url, headers={"User-Agent": "pi-weight-space-programming-evals/0.1"})
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "pi-weight-space-programming-evals/0.1"}
+        )
         with urllib.request.urlopen(req, timeout=120) as resp, open(dst, "wb") as out_f:
             out_f.write(resp.read())
 
@@ -87,14 +91,19 @@ def run_engine(cmd: str, payload: dict) -> dict:
 
 
 def main() -> None:
-    eval_data_dir = pathlib.Path(os.environ.get("WSP_EVAL_DATA_DIR", str(DEFAULT_CACHE_DIR)))
+    eval_data_dir = pathlib.Path(
+        os.environ.get("WSP_EVAL_DATA_DIR", str(DEFAULT_CACHE_DIR))
+    )
     ensure_eval_artifacts(eval_data_dir, subset_prefixes=("exp3/", "exp4/", "exp5/"))
     results = {"tests": {}, "all_passed": False}
 
     # 1. Inspect command
     ins = run_engine(
         "inspect",
-        {"checkpoint": str(eval_data_dir / "exp4" / "ppo_final_seed0.npz"), "operation": "summary"},
+        {
+            "checkpoint": str(eval_data_dir / "exp4" / "ppo_final_seed0.npz"),
+            "operation": "summary",
+        },
     )
     assert ins["total_tensors"] == 26 and ins["total_parameters"] == 254353
     results["tests"]["wsp_inspect_weights"] = {
@@ -105,7 +114,9 @@ def main() -> None:
 
     # 2. Experiment 4 surgical edit DSL parity
     exp4_ans = (eval_data_dir / "exp4" / "answer.md").read_text(encoding="utf-8")
-    exp4_ref = json.loads((eval_data_dir / "exp4" / "oneshot_result.json").read_text(encoding="utf-8"))
+    exp4_ref = json.loads(
+        (eval_data_dir / "exp4" / "oneshot_result.json").read_text(encoding="utf-8")
+    )
     exp4_out = str(eval_data_dir / "exp4" / "test_edited.npz")
     res_exp4 = run_engine(
         "edit",
@@ -146,7 +157,10 @@ def main() -> None:
             "checkpoint_b": exp4_out,
         },
     )
-    assert cmp_res["changed_tensors_count"] == 14 and len(cmp_res["identical_frozen_tensors"]) == 12
+    assert (
+        cmp_res["changed_tensors_count"] == 14
+        and len(cmp_res["identical_frozen_tensors"]) == 12
+    )
     results["tests"]["wsp_compare_checkpoints"] = {
         "passed": True,
         "changed_tensors_count": cmp_res["changed_tensors_count"],
@@ -154,7 +168,9 @@ def main() -> None:
     }
 
     # 4. Experiment 5 from-scratch Breakout DSL parity
-    exp5_ans = (eval_data_dir / "exp5" / "breakout_answer.md").read_text(encoding="utf-8")
+    exp5_ans = (eval_data_dir / "exp5" / "breakout_answer.md").read_text(
+        encoding="utf-8"
+    )
     exp5_out = str(eval_data_dir / "exp5" / "test_breakout.npz")
     res_exp5 = run_engine(
         "edit",
@@ -194,7 +210,9 @@ def main() -> None:
     }
 
     # 5. Experiment 3 static circuit probe (induction heads & alphabet bottleneck)
-    heads_ref = json.loads((eval_data_dir / "exp3" / "heads.json").read_text(encoding="utf-8"))
+    heads_ref = json.loads(
+        (eval_data_dir / "exp3" / "heads.json").read_text(encoding="utf-8")
+    )
     exp3_probe_summary = {}
     for lang in ("python", "romaji", "english"):
         ckpt_path = str(eval_data_dir / "exp3" / f"{lang}_blocks.npz")
@@ -256,6 +274,7 @@ def main() -> None:
 
     # 7. Hugging Face Model Downloader (Strict Internet Exception & Security Guards)
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmp_hf_dir:
         # A. Valid download of model config
         hf_res = run_engine(
@@ -271,7 +290,10 @@ def main() -> None:
         cfg_file = pathlib.Path(hf_res["downloaded_files"][0]["path"])
         assert cfg_file.exists() and cfg_file.stat().st_size > 0
         file_size = cfg_file.stat().st_size
-        assert "Authorized Hugging Face Hub download exception" in hf_res["policy_exception_notice"]
+        assert (
+            "Authorized Hugging Face Hub download exception"
+            in hf_res["policy_exception_notice"]
+        )
 
         # B. Caching verification
         hf_cached = run_engine(
@@ -296,7 +318,7 @@ def main() -> None:
                     "destination_dir": tmp_hf_dir,
                 },
             )
-        except Exception as e:
+        except Exception:
             traversal_blocked = True
         assert traversal_blocked, "Path traversal should be strictly blocked"
 
@@ -307,6 +329,121 @@ def main() -> None:
         "size_bytes": file_size,
         "cached_verified": True,
         "traversal_guard_blocked": True,
+    }
+
+    # 8. Outlines CFG/EBNF Final-Layer Compiler (`wsp_outlines_cfg`)
+    import torch
+    from safetensors.torch import save_file as st_save_file
+    from tokenizers import Tokenizer as HFTokenizer
+    from tokenizers.decoders import ByteLevel as ByteLevelDecoder
+    from tokenizers.models import BPE
+    from tokenizers.pre_tokenizers import ByteLevel
+    from transformers import PreTrainedTokenizerFast, Qwen2Config, Qwen2ForCausalLM
+
+    with tempfile.TemporaryDirectory() as tmp_cfg_root:
+        in_dir = pathlib.Path(tmp_cfg_root) / "in_model"
+        out_dir = pathlib.Path(tmp_cfg_root) / "out_model"
+        in_dir.mkdir(parents=True, exist_ok=True)
+
+        vocab = {"<|endoftext|>": 0}
+        for ch in " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:":
+            key = "Ġ" if ch == " " else ch
+            if key not in vocab:
+                vocab[key] = len(vocab)
+        fast_tok_backend = HFTokenizer(
+            BPE(vocab=vocab, merges=[], unk_token="<|endoftext|>")
+        )
+        fast_tok_backend.pre_tokenizer = ByteLevel(add_prefix_space=False)
+        fast_tok_backend.decoder = ByteLevelDecoder()
+        fast_tok = PreTrainedTokenizerFast(
+            tokenizer_object=fast_tok_backend,
+            unk_token="<|endoftext|>",
+            eos_token="<|endoftext|>",
+            bos_token="<|endoftext|>",
+        )
+        fast_tok.save_pretrained(str(in_dir))
+
+        torch.manual_seed(0)
+        cfg = Qwen2Config(
+            vocab_size=len(vocab),
+            hidden_size=64,
+            intermediate_size=128,
+            num_hidden_layers=2,
+            num_attention_heads=4,
+            num_key_value_heads=2,
+            bos_token_id=0,
+            eos_token_id=0,
+            tie_word_embeddings=True,
+        )
+        tiny_model = Qwen2ForCausalLM(cfg).to(torch.bfloat16)
+        cfg.save_pretrained(str(in_dir))
+        tiny_sd = {
+            k: v.contiguous()
+            for k, v in tiny_model.state_dict().items()
+            if k != "lm_head.weight"
+        }
+        st_save_file(tiny_sd, str(in_dir / "model.safetensors"))
+
+        test_grammar = 'start: "pwd" | "ls" | "false"'
+        an_res = run_engine(
+            "outlines_cfg",
+            {
+                "operation": "analyze_grammar",
+                "checkpoint": str(in_dir),
+                "grammar": test_grammar,
+            },
+        )
+        assert an_res["ok"] is True and an_res["num_states_explored"] >= 1
+
+        cmp_cfg_res = run_engine(
+            "outlines_cfg",
+            {
+                "operation": "compile",
+                "checkpoint": str(in_dir),
+                "output_dir": str(out_dir),
+                "grammar": test_grammar,
+                "prompts": ["Question : ok", "Check : fail", "status : bad"],
+                "use_chat_template": False,
+                "max_new_tokens": 8,
+                "device": "cpu",
+            },
+        )
+        assert cmp_cfg_res["ok"] is True
+        assert cmp_cfg_res["file_size_comparison"]["size_delta_bytes"] == 0
+        assert cmp_cfg_res["verification"]["grammar_compliance_rate"] == 1.0
+        assert cmp_cfg_res["verification"]["teacher_exact_match_rate"] == 1.0
+        assert (out_dir / "model.safetensors").exists()
+        assert (out_dir / "config.json").exists()
+        assert (out_dir / "manifest.json").exists()
+        assert (out_dir / "edit.npz").exists()
+
+        ver_cfg_res = run_engine(
+            "outlines_cfg",
+            {
+                "operation": "verify_bundle",
+                "checkpoint": str(out_dir),
+                "grammar": test_grammar,
+                "prompts": ["Question : ok", "Check : fail", "status : bad"],
+                "use_chat_template": False,
+                "max_new_tokens": 8,
+                "device": "cpu",
+            },
+        )
+        assert (
+            ver_cfg_res["ok"] is True and ver_cfg_res["grammar_compliance_rate"] == 1.0
+        )
+
+    results["tests"]["wsp_outlines_cfg"] = {
+        "passed": True,
+        "states_explored": an_res["num_states_explored"],
+        "size_delta_bytes": cmp_cfg_res["file_size_comparison"]["size_delta_bytes"],
+        "grammar_compliance_rate": ver_cfg_res["grammar_compliance_rate"],
+        "teacher_exact_match_rate": cmp_cfg_res["verification"][
+            "teacher_exact_match_rate"
+        ],
+        "changed_entries_total": cmp_cfg_res["manifest_summary"][
+            "changed_entries_total"
+        ],
     }
 
     results["all_passed"] = True

@@ -164,7 +164,9 @@ def cmd_inspect(args: Dict[str, Any]) -> Dict[str, Any]:
                     embed_name = cand
                     break
         if not embed_name:
-            raise ValueError("Could not find embedding tensor; specify embed_tensor explicitly.")
+            raise ValueError(
+                "Could not find embedding tensor; specify embed_tensor explicitly."
+            )
         W = ckpt.get(tensor_name).astype(np.float32)
         E = ckpt.get(embed_name).astype(np.float32)
         tok = P.Tokenizer(args["checkpoint"])
@@ -182,16 +184,26 @@ def cmd_inspect(args: Dict[str, Any]) -> Dict[str, Any]:
                 {
                     "singular_index": idx_v,
                     "singular_value": round(float(s[idx_v]), 5),
-                    "top_positive_tokens": _safe_decode_tokens(tok, top_pos, scores, top_k),
-                    "top_negative_tokens": _safe_decode_tokens(tok, top_neg, scores, top_k),
+                    "top_positive_tokens": _safe_decode_tokens(
+                        tok, top_pos, scores, top_k
+                    ),
+                    "top_negative_tokens": _safe_decode_tokens(
+                        tok, top_neg, scores, top_k
+                    ),
                 }
             )
-        return {"tensor": tensor_name, "embed_tensor": embed_name, "projections": projections}
+        return {
+            "tensor": tensor_name,
+            "embed_tensor": embed_name,
+            "projections": projections,
+        }
 
     raise ValueError(f"Unknown inspect operation: {op!r}")
 
 
-def _safe_decode_tokens(tok: P.Tokenizer, ids: List[int], scores: np.ndarray, k: int) -> List[Dict[str, Any]]:
+def _safe_decode_tokens(
+    tok: P.Tokenizer, ids: List[int], scores: np.ndarray, k: int
+) -> List[Dict[str, Any]]:
     """Decode tokens with ASCII/printable safety filtering (Experiment 8 content-filter safeguard)."""
     out = []
     for i in ids:
@@ -199,7 +211,13 @@ def _safe_decode_tokens(tok: P.Tokenizer, ids: List[int], scores: np.ndarray, k:
         ascii_safe = "".join(ch if 32 <= ord(ch) < 127 else "?" for ch in raw)
         if not ascii_safe.strip():
             continue
-        out.append({"token_id": int(i), "token_ascii": ascii_safe[:24], "score": round(float(scores[i]), 5)})
+        out.append(
+            {
+                "token_id": int(i),
+                "token_ascii": ascii_safe[:24],
+                "score": round(float(scores[i]), 5),
+            }
+        )
         if len(out) >= k:
             break
     return out
@@ -230,7 +248,16 @@ def _discover_transformer_layers(ckpt: P.Checkpoint) -> Dict[int, Dict[str, str]
                 d["W_k"] = k
             elif any(x in suffix for x in ("v_proj.weight", "W_v", "attn.v")):
                 d["W_v"] = k
-            elif any(x in suffix for x in ("o_proj.weight", "out_proj.weight", "W_o", "attn.o", "c_proj.weight")):
+            elif any(
+                x in suffix
+                for x in (
+                    "o_proj.weight",
+                    "out_proj.weight",
+                    "W_o",
+                    "attn.o",
+                    "c_proj.weight",
+                )
+            ):
                 if "mlp" in suffix:
                     d["W_proj"] = k
                 else:
@@ -248,7 +275,9 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
     ckpt = P.Checkpoint(args["checkpoint"])
     op = args.get("operation", "qk_ov_analysis")
     n_heads = int(args.get("num_heads", ckpt.config.get("num_attention_heads", 6)))
-    n_kv_heads = int(args.get("num_kv_heads", ckpt.config.get("num_key_value_heads", n_heads)))
+    n_kv_heads = int(
+        args.get("num_kv_heads", ckpt.config.get("num_key_value_heads", n_heads))
+    )
     layers = _discover_transformer_layers(ckpt)
 
     if op in ("qk_ov_analysis", "induction_heads"):
@@ -276,7 +305,9 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
                 Wo = Wo.T
 
             # Incorporate LayerNorm gain and mean-centering projection P = I - 11^T / d when present
-            P_center = np.eye(d_model, dtype=np.float32) - np.ones((d_model, d_model), dtype=np.float32) / float(d_model)
+            P_center = np.eye(d_model, dtype=np.float32) - np.ones(
+                (d_model, d_model), dtype=np.float32
+            ) / float(d_model)
             if "ln1_w" in lmap:
                 g1 = ckpt.get(lmap["ln1_w"]).astype(np.float32).reshape(1, -1)
                 ln_proj = np.diag(g1.ravel()) @ P_center
@@ -289,10 +320,18 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
 
             for h in range(n_heads):
                 kv_h = h // kv_group
-                q_h = Wq[h * d_head : (h + 1) * d_head, :] @ ln_proj  # (d_head, d_model)
-                k_h = Wk[kv_h * d_head : (kv_h + 1) * d_head, :] @ ln_proj  # (d_head, d_model)
-                v_h = Wv[kv_h * d_head : (kv_h + 1) * d_head, :] @ ln_proj  # (d_head, d_model)
-                o_h = P_center @ Wo[:, h * d_head : (h + 1) * d_head]  # (d_model, d_head)
+                q_h = (
+                    Wq[h * d_head : (h + 1) * d_head, :] @ ln_proj
+                )  # (d_head, d_model)
+                k_h = (
+                    Wk[kv_h * d_head : (kv_h + 1) * d_head, :] @ ln_proj
+                )  # (d_head, d_model)
+                v_h = (
+                    Wv[kv_h * d_head : (kv_h + 1) * d_head, :] @ ln_proj
+                )  # (d_head, d_model)
+                o_h = (
+                    P_center @ Wo[:, h * d_head : (h + 1) * d_head]
+                )  # (d_model, d_head)
 
                 # Effective LayerNorm-centered QK bilinear form M = (1/sqrt(d_head)) q_e^T k_e
                 w_qk = (q_h.T @ k_h) * scale  # (d_model, d_model)
@@ -317,19 +356,32 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
                         "head": h,
                         "label": f"{l_idx}.{h}",
                         "qk_fro_norm": round(qk_fro, 4),
-                        "qk_spectral_norm": round(float(s_qk[0]) if s_qk.size else 0.0, 4),
+                        "qk_spectral_norm": round(
+                            float(s_qk[0]) if s_qk.size else 0.0, 4
+                        ),
                         "qk_trace_over_fro": round(qk_trace / qk_fro, 4),
                         "ov_fro_norm": round(ov_fro, 4),
-                        "ov_spectral_norm": round(float(s_ov[0]) if s_ov.size else 0.0, 4),
+                        "ov_spectral_norm": round(
+                            float(s_ov[0]) if s_ov.size else 0.0, 4
+                        ),
                         "ov_trace_over_fro": round(ov_trace / ov_fro, 4),
                         "ov_symmetry": round(
-                            (float(np.linalg.norm(sym_ov)) - float(np.linalg.norm(antisym_ov))) / ov_fro, 4
+                            (
+                                float(np.linalg.norm(sym_ov))
+                                - float(np.linalg.norm(antisym_ov))
+                            )
+                            / ov_fro,
+                            4,
                         ),
                     }
                 )
 
         if op == "qk_ov_analysis":
-            return {"num_layers": len(layers), "num_heads": n_heads, "heads": head_reports}
+            return {
+                "num_layers": len(layers),
+                "num_heads": n_heads,
+                "heads": head_reports,
+            }
 
         # Induction / copying head detection (Experiment 3 static directional K-composition trace cosine)
         # For earlier head (l1, h1) with OV circuit B_{l1,h1} and later head (l2, h2) with QK form M_{l2,h2}:
@@ -430,7 +482,9 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
                     "effective_rank": erank,
                     "participation_ratio": pratio,
                     "max_column_norm": round(float(np.max(col_norms)), 4),
-                    "top_columns_by_norm": [int(i) for i in np.argsort(-col_norms)[:12]],
+                    "top_columns_by_norm": [
+                        int(i) for i in np.argsort(-col_norms)[:12]
+                    ],
                     "top_columns_along_u0": top_cols,
                 }
             )
@@ -441,9 +495,14 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
             for l2 in layer_ids[i + 1 :]:
                 cos = float(np.dot(top_u_per_layer[l1], top_u_per_layer[l2]))
                 if abs(cos) > 0.15:
-                    cross_alignments.append({"layer_a": l1, "layer_b": l2, "cosine": round(cos, 4)})
+                    cross_alignments.append(
+                        {"layer_a": l1, "layer_b": l2, "cosine": round(cos, 4)}
+                    )
         cross_alignments.sort(key=lambda x: -abs(x["cosine"]))
-        return {"mlp_layers": mlp_reports, "cross_layer_u0_alignments": cross_alignments[:20]}
+        return {
+            "mlp_layers": mlp_reports,
+            "cross_layer_u0_alignments": cross_alignments[:20],
+        }
 
     if op == "subspace_rank":
         # Experiment 3 Romaji vs English/Python check: effective rank of block output matrices
@@ -465,8 +524,12 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
                         "shape": list(W.shape),
                         "effective_rank_entropy": erank,
                         "participation_ratio": pratio,
-                        "sv_ratio_s10_s0": round(float(s[min(10, len(s) - 1)] / (s[0] + 1e-12)), 5),
-                        "sv_ratio_s25_s0": round(float(s[min(25, len(s) - 1)] / (s[0] + 1e-12)), 5),
+                        "sv_ratio_s10_s0": round(
+                            float(s[min(10, len(s) - 1)] / (s[0] + 1e-12)), 5
+                        ),
+                        "sv_ratio_s25_s0": round(
+                            float(s[min(25, len(s) - 1)] / (s[0] + 1e-12)), 5
+                        ),
                     }
                 )
             if "W_fc" in lmap and "W_proj" in lmap:
@@ -477,7 +540,9 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
                     W_fc = W_fc.T
                 if W_proj.shape[0] != d_model:
                     W_proj = W_proj.T
-                P_c = np.eye(d_model, dtype=np.float64) - np.ones((d_model, d_model), dtype=np.float64) / float(d_model)
+                P_c = np.eye(d_model, dtype=np.float64) - np.ones(
+                    (d_model, d_model), dtype=np.float64
+                ) / float(d_model)
                 if "ln2_w" in lmap:
                     g2 = ckpt.get(lmap["ln2_w"]).astype(np.float64).reshape(1, -1)
                     F_in = (W_fc * g2) @ P_c
@@ -490,17 +555,30 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
                 top_gaps = []
                 for idx in range(15, min(50, len(sr) - 1)):
                     ratio = float(sr[idx] / (sr[idx + 1] + 1e-12))
-                    top_gaps.append({"rank_1based": idx + 1, "sv": round(float(sr[idx]), 4), "ratio_to_next": round(ratio, 4)})
+                    top_gaps.append(
+                        {
+                            "rank_1based": idx + 1,
+                            "sv": round(float(sr[idx]), 4),
+                            "ratio_to_next": round(ratio, 4),
+                        }
+                    )
                 top_gaps.sort(key=lambda x: -x["ratio_to_next"])
                 regressed_mlp_gaps.append(
                     {
                         "layer": l_idx,
                         "top_singular_value_gaps_rank_16_to_50": top_gaps[:6],
-                        "energy_top24_fraction": round(float(np.sum(sr[:24] ** 2) / (np.sum(sr**2) + 1e-12)), 4),
-                        "energy_top30_fraction": round(float(np.sum(sr[:30] ** 2) / (np.sum(sr**2) + 1e-12)), 4),
+                        "energy_top24_fraction": round(
+                            float(np.sum(sr[:24] ** 2) / (np.sum(sr**2) + 1e-12)), 4
+                        ),
+                        "energy_top30_fraction": round(
+                            float(np.sum(sr[:30] ** 2) / (np.sum(sr**2) + 1e-12)), 4
+                        ),
                     }
                 )
-        return {"subspace_rank": reports, "mlp_input_regressed_alphabet_bottleneck": regressed_mlp_gaps}
+        return {
+            "subspace_rank": reports,
+            "mlp_input_regressed_alphabet_bottleneck": regressed_mlp_gaps,
+        }
 
     raise ValueError(f"Unknown circuit_probe operation: {op!r}")
 
@@ -589,7 +667,9 @@ def _parse_slice_tuple(spec: str):
     return items[0] if len(items) == 1 else tuple(items)
 
 
-def _resolve_dsl_tensor_name(tname: str, tensors: Dict[str, np.ndarray]) -> Optional[str]:
+def _resolve_dsl_tensor_name(
+    tname: str, tensors: Dict[str, np.ndarray]
+) -> Optional[str]:
     if tname in tensors:
         return tname
     alt_u = tname.replace(".", "_")
@@ -608,10 +688,18 @@ def _resolve_dsl_tensor_name(tname: str, tensors: Dict[str, np.ndarray]) -> Opti
         "critic_head.b": "params/GeneralActorCriticRNN_0/Dense_1/bias",
     }
     for k in range(5):
-        flax_map[f"actor{k}.W"] = f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k}/Dense_0/kernel"
-        flax_map[f"actor{k}.b"] = f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k}/Dense_0/bias"
-        flax_map[f"critic{k}.W"] = f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k + 5}/Dense_0/kernel"
-        flax_map[f"critic{k}.b"] = f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k + 5}/Dense_0/bias"
+        flax_map[f"actor{k}.W"] = (
+            f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k}/Dense_0/kernel"
+        )
+        flax_map[f"actor{k}.b"] = (
+            f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k}/Dense_0/bias"
+        )
+        flax_map[f"critic{k}.W"] = (
+            f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k + 5}/Dense_0/kernel"
+        )
+        flax_map[f"critic{k}.b"] = (
+            f"params/GeneralActorCriticRNN_0/DenseAndActivation_{k + 5}/Dense_0/bias"
+        )
     mapped = flax_map.get(tname)
     if mapped and mapped in tensors:
         return mapped
@@ -647,14 +735,26 @@ def apply_edits_dsl(tensors: Dict[str, np.ndarray], dsl_text: str) -> Dict[str, 
     applied = 0
     errors = []
     touched = set()
-    stmt_rx = re.compile(r"^([A-Za-z0-9_./]+)\s*\[\s*([^\]]+)\s*\]\s*(=|\+=|-=|\*=)\s*(.+)$")
+    stmt_rx = re.compile(
+        r"^([A-Za-z0-9_./]+)\s*\[\s*([^\]]+)\s*\]\s*(=|\+=|-=|\*=)\s*(.+)$"
+    )
 
     for stmt in statements:
         m = stmt_rx.match(stmt)
         if not m:
-            errors.append({"statement": stmt, "error": "Syntax did not match TENSOR[slice] op value"})
+            errors.append(
+                {
+                    "statement": stmt,
+                    "error": "Syntax did not match TENSOR[slice] op value",
+                }
+            )
             continue
-        raw_tname, slice_str, op, val_str = m.group(1), m.group(2), m.group(3), m.group(4)
+        raw_tname, slice_str, op, val_str = (
+            m.group(1),
+            m.group(2),
+            m.group(3),
+            m.group(4),
+        )
         tname = _resolve_dsl_tensor_name(raw_tname, tensors)
         if tname is None:
             errors.append({"statement": stmt, "error": f"Unknown tensor {raw_tname!r}"})
@@ -719,9 +819,13 @@ def build_edit_manifest(
             "dtype": "bfloat16",
             "changed_entries": changed_entries,
             "frac_changed": round(float(mask.mean()), 6),
-            "changed_columns": int(mask.any(0).sum()) if mask.ndim >= 2 else changed_entries,
+            "changed_columns": int(mask.any(0).sum())
+            if mask.ndim >= 2
+            else changed_entries,
             "changed_rows": int(mask.any(1).sum()) if mask.ndim >= 2 else 1,
-            "relative_change": round(diff_norm / base_norm, 6) if base_norm > 0 else None,
+            "relative_change": round(diff_norm / base_norm, 6)
+            if base_norm > 0
+            else None,
             "base_sha256": P.sha256_bytes(b_bits),
             "edited_sha256": P.sha256_bytes(e_bits),
         }
@@ -810,7 +914,10 @@ def cmd_edit(args: Dict[str, Any]) -> Dict[str, Any]:
 
     tensor_name = args["tensor_name"]
     if not P.ALLOW_PROTECTED_EDITS and not args.get("allow_protected", False):
-        if any(tensor_name.endswith(pat) or tensor_name == pat for pat in P.PROTECTED_PATTERNS):
+        if any(
+            tensor_name.endswith(pat) or tensor_name == pat
+            for pat in P.PROTECTED_PATTERNS
+        ):
             raise ValueError(
                 f"Refused edit to protected tensor {tensor_name!r} (embedding, output head, or final norm)."
             )
@@ -846,7 +953,9 @@ def cmd_edit(args: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 W = W - alpha * np.outer(dots, u)
         else:
-            raise ValueError(f"Direction length {u.shape[0]} does not match tensor shape {W.shape}")
+            raise ValueError(
+                f"Direction length {u.shape[0]} does not match tensor shape {W.shape}"
+            )
 
     elif mode == "ablate":
         scale = float(args.get("scale", 0.0))
@@ -883,18 +992,39 @@ def cmd_edit(args: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 FORBIDDEN_TRAINING_PATTERNS = [
-    (r"\.backward\s*\(", "Calling .backward() (gradient computation is forbidden in Weight-Space Programming)"),
-    (r"\btorch\.optim\b", "Using torch.optim (gradient-based optimizers are forbidden)"),
+    (
+        r"\.backward\s*\(",
+        "Calling .backward() (gradient computation is forbidden in Weight-Space Programming)",
+    ),
+    (
+        r"\btorch\.optim\b",
+        "Using torch.optim (gradient-based optimizers are forbidden)",
+    ),
     (r"\bautograd\.grad\b", "Using autograd.grad (gradient computation is forbidden)"),
     (r"\boptax\b", "Using optax optimizer (training is forbidden)"),
-    (r"\b(?: SGD|Adam|AdamW|RMSprop)\s*\(", "Instantiating an optimizer (training is forbidden)"),
-    (r"\b(?:LinearRegression|Ridge|Lasso|LogisticRegression|MLPClassifier|MLPRegressor)\b", "Fitting models to data is forbidden"),
+    (
+        r"\b(?: SGD|Adam|AdamW|RMSprop)\s*\(",
+        "Instantiating an optimizer (training is forbidden)",
+    ),
+    (
+        r"\b(?:LinearRegression|Ridge|Lasso|LogisticRegression|MLPClassifier|MLPRegressor)\b",
+        "Fitting models to data is forbidden",
+    ),
 ]
 
 FORBIDDEN_EVAL_PATTERNS = [
-    (r"[\"'\`](?:[^\"'\`]*[/\\\\])?(?:eval|evals)(?:[/\\\\][^\"'\`]*)?[\"'\`]", "Accessing benchmark evaluation directories or files (eval/ or evals/) is forbidden to prevent test leakage"),
-    (r"\b(?:import\s+eval\b|from\s+eval\b)", "Importing from evaluation modules is forbidden to prevent test leakage"),
-    (r"\b(?:eval_model|test_functional|run_paper_evals)\b", "Directly referencing evaluation harnesses is forbidden to prevent test leakage"),
+    (
+        r"[\"'\`](?:[^\"'\`]*[/\\\\])?(?:eval|evals)(?:[/\\\\][^\"'\`]*)?[\"'\`]",
+        "Accessing benchmark evaluation directories or files (eval/ or evals/) is forbidden to prevent test leakage",
+    ),
+    (
+        r"\b(?:import\s+eval\b|from\s+eval\b)",
+        "Importing from evaluation modules is forbidden to prevent test leakage",
+    ),
+    (
+        r"\b(?:eval_model|test_functional|run_paper_evals)\b",
+        "Directly referencing evaluation harnesses is forbidden to prevent test leakage",
+    ),
 ]
 
 
@@ -925,11 +1055,13 @@ def cmd_sandbox(args: Dict[str, Any]) -> Dict[str, Any]:
             "ok": False,
             "blocked": True,
             "violations": violations,
-            "output": "Refused by Weight-Space Programming sandbox:\n- " + "\n- ".join(violations),
+            "output": "Refused by Weight-Space Programming sandbox:\n- "
+            + "\n- ".join(violations),
             "elapsed_s": 0.0,
         }
 
-    runner_code = f"""
+    runner_code = (
+        f"""
 import sys, os
 sys.path.insert(0, {ENGINE_DIR!r})
 from prelude import *
@@ -945,9 +1077,14 @@ if MODEL_PATH and os.path.exists(MODEL_PATH):
             W = {{k: _default_ckpt.get(k) for k in _default_ckpt.keys()}}
     except Exception:
         pass
-""" + "\n" + code
+"""
+        + "\n"
+        + code
+    )
 
-    with tempfile.NamedTemporaryFile("w", suffix=".py", dir=work_dir, delete=False, encoding="utf-8") as tf:
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".py", dir=work_dir, delete=False, encoding="utf-8"
+    ) as tf:
         tf.write(runner_code)
         script_path = tf.name
 
@@ -956,7 +1093,9 @@ if MODEL_PATH and os.path.exists(MODEL_PATH):
         "HOME": work_dir,
         "TMPDIR": "/tmp",
         "WSP_WORK_DIR": work_dir,
-        "WSP_MODEL_PATH": os.path.abspath(model_path) if model_path and os.path.exists(model_path) else "",
+        "WSP_MODEL_PATH": os.path.abspath(model_path)
+        if model_path and os.path.exists(model_path)
+        else "",
         "OMP_NUM_THREADS": "8",
         "CUDA_VISIBLE_DEVICES": "",
         "NO_PROXY": "*",
@@ -1047,11 +1186,17 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
     across the entire WSP harness and Python sandbox.
     """
     repo_id = str(args.get("repo_id", "")).strip()
-    if not repo_id or not re.match(r"^[a-zA-Z0-9_\-\.]+(/[a-zA-Z0-9_\-\.]+)?$", repo_id):
+    if not repo_id or not re.match(
+        r"^[a-zA-Z0-9_\-\.]+(/[a-zA-Z0-9_\-\.]+)?$", repo_id
+    ):
         raise ValueError(f"Invalid or missing Hugging Face repo_id: {repo_id!r}")
 
     revision = str(args.get("revision", "main")).strip() or "main"
-    token = args.get("token") or os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    token = (
+        args.get("token")
+        or os.environ.get("HF_TOKEN")
+        or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    )
 
     # Safe destination directory under workspace / repo models
     dest_dir = args.get("destination_dir")
@@ -1086,11 +1231,15 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
             raise FileNotFoundError(
                 f"Hugging Face repository '{repo_id}' (revision '{revision}') not found (HTTP 404)."
             ) from err
-        raise RuntimeError(f"Hugging Face API request failed with HTTP {err.code}: {err.reason}") from err
+        raise RuntimeError(
+            f"Hugging Face API request failed with HTTP {err.code}: {err.reason}"
+        ) from err
     except Exception as exc:
         raise RuntimeError(f"Failed to connect to Hugging Face API: {exc}") from exc
 
-    siblings = [s.get("rfilename") for s in data.get("siblings", []) if s.get("rfilename")]
+    siblings = [
+        s.get("rfilename") for s in data.get("siblings", []) if s.get("rfilename")
+    ]
 
     # Determine files to download
     patterns = args.get("patterns")
@@ -1174,12 +1323,20 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
         force_download = bool(args.get("force_download", False))
         cached = False
 
-        if not force_download and os.path.exists(dest_file_path) and os.path.getsize(dest_file_path) > 0:
+        if (
+            not force_download
+            and os.path.exists(dest_file_path)
+            and os.path.getsize(dest_file_path) > 0
+        ):
             try:
-                head_req = urllib.request.Request(download_url, headers=headers, method="HEAD")
+                head_req = urllib.request.Request(
+                    download_url, headers=headers, method="HEAD"
+                )
                 with opener.open(head_req, timeout=15) as head_resp:
                     remote_len = head_resp.headers.get("Content-Length")
-                    if remote_len and int(remote_len) == os.path.getsize(dest_file_path):
+                    if remote_len and int(remote_len) == os.path.getsize(
+                        dest_file_path
+                    ):
                         cached = True
             except Exception:
                 pass
@@ -1206,20 +1363,26 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
             file_size = os.path.getsize(dest_file_path)
 
         total_bytes += file_size
-        downloaded.append({
-            "filename": rfilename,
-            "path": dest_file_path,
-            "size_bytes": file_size,
-            "cached": cached,
-        })
+        downloaded.append(
+            {
+                "filename": rfilename,
+                "path": dest_file_path,
+                "size_bytes": file_size,
+                "cached": cached,
+            }
+        )
 
     # Determine primary model path
     primary_model_path = None
-    safetensor_files = [d["path"] for d in downloaded if d["filename"].endswith(".safetensors")]
+    safetensor_files = [
+        d["path"] for d in downloaded if d["filename"].endswith(".safetensors")
+    ]
     npz_files = [d["path"] for d in downloaded if d["filename"].endswith(".npz")]
 
     if any(d["filename"] == "model.safetensors" for d in downloaded):
-        primary_model_path = next(d["path"] for d in downloaded if d["filename"] == "model.safetensors")
+        primary_model_path = next(
+            d["path"] for d in downloaded if d["filename"] == "model.safetensors"
+        )
     elif len(safetensor_files) == 1:
         primary_model_path = safetensor_files[0]
     elif len(safetensor_files) > 1:
@@ -1245,6 +1408,20 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# 7. Outlines CFG/EBNF Final-Layer Compiler (`outlines_cfg`)
+# ---------------------------------------------------------------------------
+
+
+def cmd_outlines_cfg(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Compile CFG/EBNF grammars via Outlines into final-layer NN weights."""
+    import outlines_cfg as _ocfg
+
+    if "work_dir" not in args:
+        args = {**args, "work_dir": P.WORK}
+    return _ocfg.run_outlines_cfg(args)
+
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"error": "Usage: wsp_engine.py <command> [json_args]"}))
@@ -1260,6 +1437,7 @@ def main():
         "edit": cmd_edit,
         "sandbox": cmd_sandbox,
         "hf_download": cmd_hf_download,
+        "outlines_cfg": cmd_outlines_cfg,
     }
     if cmd not in dispatch:
         print(json.dumps({"error": f"Unknown command {cmd!r}"}))

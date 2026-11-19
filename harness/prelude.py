@@ -68,9 +68,16 @@ def _safe_listdir(path="."):
 def _safe_walk(top, *args, **kwargs):
     for root, dirs, files in _orig_walk(top, *args, **kwargs):
         norm_root = os.path.normpath(str(root)).replace("\\", "/")
-        if "/.cache" not in norm_root and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1":
+        if (
+            "/.cache" not in norm_root
+            and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1"
+        ):
             dirs[:] = [d for d in dirs if d not in ("eval", "evals")]
-            safe_files = [f for f in files if not f.startswith("eval_") and not f.endswith("_eval.py")]
+            safe_files = [
+                f
+                for f in files
+                if not f.startswith("eval_") and not f.endswith("_eval.py")
+            ]
             yield root, dirs, safe_files
         else:
             yield root, dirs, files
@@ -88,7 +95,10 @@ class _SafeScandirIterator:
     def __next__(self):
         while True:
             entry = next(self._it)
-            if "/.cache" not in self._norm_path and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1":
+            if (
+                "/.cache" not in self._norm_path
+                and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1"
+            ):
                 if entry.name in ("eval", "evals"):
                     continue
             return entry
@@ -110,7 +120,9 @@ def _safe_scandir(path="."):
 
 def _safe_open(file, *args, **kwargs):
     if _is_eval_path(file):
-        raise FileNotFoundError(f"[Errno 2] No such file or directory: '{file}' (Protected evaluation benchmark)")
+        raise FileNotFoundError(
+            f"[Errno 2] No such file or directory: '{file}' (Protected evaluation benchmark)"
+        )
     return _orig_open(file, *args, **kwargs)
 
 
@@ -124,6 +136,7 @@ DT = {
     "F16": np.float16,
     "F32": np.float32,
     "F64": np.float64,
+    "F8_E4M3": np.uint8,
     "I64": np.int64,
     "I32": np.int32,
     "I16": np.int16,
@@ -131,6 +144,25 @@ DT = {
     "U8": np.uint8,
     "BOOL": np.bool_,
 }
+
+
+def f8_e4m3_to_f32(bits: np.ndarray) -> np.ndarray:
+    """Convert IEEE-like FP8 E4M3FN uint8 bit patterns to exact float32 array."""
+    u = np.asarray(bits, dtype=np.uint8)
+    sign = (u >> 7) & 1
+    exp = (u >> 3) & 0x0F
+    mant = u & 0x07
+    val = np.empty(u.shape, dtype=np.float32)
+    is_nan = (exp == 15) & (mant == 7)
+    is_sub = exp == 0
+    is_norm = (~is_nan) & (~is_sub)
+    val[is_nan] = np.nan
+    val[is_sub] = np.ldexp(mant[is_sub].astype(np.float32) / 8.0, -6)
+    val[is_norm] = np.ldexp(
+        1.0 + mant[is_norm].astype(np.float32) / 8.0,
+        exp[is_norm].astype(np.int32) - 7,
+    )
+    return np.where(sign > 0, -val, val).astype(np.float32)
 
 
 def bf16_bits(a: np.ndarray) -> np.ndarray:
@@ -246,6 +278,8 @@ class Checkpoint:
             dt = meta["dtype"]
             if dt == "BF16":
                 x = bf16_to_f32(raw.view(np.uint16))
+            elif dt == "F8_E4M3":
+                x = f8_e4m3_to_f32(raw.view(np.uint8))
             elif dt == "F16":
                 x = raw.view(np.float16).astype(np.float32)
             elif dt == "F32":
@@ -299,7 +333,9 @@ class Tokenizer:
         return s.replace("▁", " ").replace("Ġ", " ").encode("utf-8")
 
     def decode(self, ids) -> str:
-        return b"".join(self.token_bytes(int(i)) for i in ids).decode("utf-8", errors="replace")
+        return b"".join(self.token_bytes(int(i)) for i in ids).decode(
+            "utf-8", errors="replace"
+        )
 
     def text(self, i: int) -> str:
         return self.decode([i])
@@ -320,7 +356,11 @@ class Tokenizer:
             if s in self.vocab:
                 out.append(self.vocab[s])
             else:
-                out.extend(self.vocab[f"<0x{b:02X}>"] for b in s.encode("utf-8") if f"<0x{b:02X}>" in self.vocab)
+                out.extend(
+                    self.vocab[f"<0x{b:02X}>"]
+                    for b in s.encode("utf-8")
+                    if f"<0x{b:02X}>" in self.vocab
+                )
         return out
 
 
@@ -395,7 +435,9 @@ def load(name: str) -> np.ndarray:
 
 def save_edit(name: str, tensor: np.ndarray):
     """Save an edited tensor with Experiment 8 validation guards."""
-    if not ALLOW_PROTECTED_EDITS and any(name.endswith(pat) or name == pat for pat in PROTECTED_PATTERNS):
+    if not ALLOW_PROTECTED_EDITS and any(
+        name.endswith(pat) or name == pat for pat in PROTECTED_PATTERNS
+    ):
         raise ValueError(
             f"Refused by save_edit: {name!r} is a protected tensor (embedding, output head, or final norm)."
         )
@@ -403,7 +445,9 @@ def save_edit(name: str, tensor: np.ndarray):
     if not np.isfinite(arr).all():
         raise ValueError(f"Refused by save_edit: tensor {name!r} contains NaN or Inf.")
     if name in SHAPES and arr.shape != tuple(SHAPES[name]):
-        raise ValueError(f"Shape mismatch for {name!r}: got {arr.shape}, expected {SHAPES[name]}.")
+        raise ValueError(
+            f"Shape mismatch for {name!r}: got {arr.shape}, expected {SHAPES[name]}."
+        )
     if _DEFAULT_CKPT is not None and name in _DEFAULT_CKPT.info:
         orig = load_original(name)
         diff = arr - orig
@@ -457,4 +501,8 @@ def save(name: str, a: np.ndarray):
 
 
 def saved():
-    return sorted(f[:-4] for f in os.listdir(NET_DIR) if f.endswith(".npy")) if os.path.isdir(NET_DIR) else []
+    return (
+        sorted(f[:-4] for f in os.listdir(NET_DIR) if f.endswith(".npy"))
+        if os.path.isdir(NET_DIR)
+        else []
+    )

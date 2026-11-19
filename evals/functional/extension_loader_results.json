@@ -9,7 +9,8 @@
     "wsp_edit_weights",
     "wsp_python_sandbox",
     "wsp_forward_pass",
-    "wsp_hf_download"
+    "wsp_hf_download",
+    "wsp_outlines_cfg"
   ],
   "commands_registered": [
     "wsp",
@@ -18,7 +19,8 @@
     "wsp-apply-edits",
     "wsp-reset",
     "wsp-header",
-    "wsp-hf-download"
+    "wsp-hf-download",
+    "wsp-outlines-cfg"
   ],
   "cli_flags_registered": [
     "wsp-mode",
@@ -42,6 +44,7 @@
   ],
   "skills_loaded": [
     "huggingface-model-download",
+    "outlines-cfg-compilation",
     "uv-python-execution",
     "weight-space-reading",
     "weight-space-surgery",
