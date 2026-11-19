@@ -1,0 +1,16 @@
+{
+  "date": "2026-11-04",
+  "eval_type": "original-harness-baseline",
+  "description": "Original 17-prompt evaluation suite from initial WSP depth-pruning session.",
+  "models": {
+    "pruned_4layer": {
+      "path": "models/output",
+      "depth_reduction": "-83.3% (24 -> 4 layers)",
+      "size_reduction": "-80.2% (942 MB -> 186.7 MB in FP8)",
+      "pwd": {"total": 5, "passed": 5, "rate": 1.00},
+      "ls": {"total": 5, "passed": 5, "rate": 1.00},
+      "refusal": {"total": 7, "passed": 7, "rate": 1.00, "emitted": "false"},
+      "overall": {"total": 17, "passed": 17, "rate": 1.00}
+    }
+  }
+}

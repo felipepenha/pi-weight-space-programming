@@ -1,0 +1,18 @@
+[project]
+name = "aggressive-pruning-plus-outlines-cfg-example"
+version = "0.1.0"
+description = "Aggressive model depth pruning combined and compared with Outlines EBNF context-free grammar (CFG) constrained decoding"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "accelerate>=0.26.0",
+    "laya>=0.1.0",
+    "llguidance>=0.7.0",
+    "outlines>=1.0.0",
+    "torch>=2.2.0",
+    "transformers>=4.48.0",
+]
+
+[tool.uv]
+package = false
+
