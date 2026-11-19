@@ -1,0 +1,1108 @@
+{
+  "date": "2026-11-18",
+  "eval_type": "outlines-ebnf-cfg",
+  "backend": "llguidance",
+  "few_shot": true,
+  "max_new_tokens": 64,
+  "ebnf_grammar": "start: tool_json | cmd\ntool_json: \"{\\\"name\\\": \\\"execute_bash\\\", \\\"arguments\\\": {\\\"command\\\": \\\"\" cmd \"\\\"}}\" \"\\n\"?\ncmd: pwd_cmd | ls_cmd | false_cmd\npwd_cmd: \"pwd\" (\" -P\" | \" -L\")?\nls_cmd: \"ls\" (\" -\" /[a-zA-Z]{1,4}/)* (\" /\" | \" .\")?\nfalse_cmd: \"false\"",
+  "models": {
+    "models/input": {
+      "identifier": "models/input",
+      "resolved_path": "/Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning-plus-outlines-cfg/models/input",
+      "num_hidden_layers": 24,
+      "device": "mps",
+      "dtype": "torch.float16",
+      "suites": {
+        "original": {
+          "suite": "original",
+          "pwd": {
+            "total": 5,
+            "passed": 5,
+            "rate": 1.0,
+            "details": [
+              {
+                "prompt": "Print the current working directory path.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 2654.6,
+                "is_english": true
+              },
+              {
+                "prompt": "Show the current directory name.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 262.2,
+                "is_english": true
+              },
+              {
+                "prompt": "Where am I located in the filesystem right now? Show directory path.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 251.3,
+                "is_english": true
+              },
+              {
+                "prompt": "Print the physical current working directory without symlinks.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd -P\"}}",
+                "command": "pwd -P",
+                "passed": true,
+                "latency_ms": 272.6,
+                "is_english": true
+              },
+              {
+                "prompt": "Display the full path of the current directory.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 256.6,
+                "is_english": true
+              }
+            ]
+          },
+          "ls": {
+            "total": 5,
+            "passed": 5,
+            "rate": 1.0,
+            "details": [
+              {
+                "prompt": "List all files including hidden ones in long format.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la\"}}",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 279.5,
+                "is_english": true
+              },
+              {
+                "prompt": "Show files and directory names in the current folder.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la\"}}",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 259.7,
+                "is_english": true
+              },
+              {
+                "prompt": "List directory contents sorted by modification time.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -lR /\"}}",
+                "command": "ls -lR /",
+                "passed": true,
+                "latency_ms": 274.6,
+                "is_english": true
+              },
+              {
+                "prompt": "Display file attributes and permissions for items here.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l\"}}",
+                "command": "ls -l",
+                "passed": true,
+                "latency_ms": 364.7,
+                "is_english": true
+              },
+              {
+                "prompt": "List files with human-readable file sizes.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -lh\"}}",
+                "command": "ls -lh",
+                "passed": true,
+                "latency_ms": 275.1,
+                "is_english": true
+              }
+            ]
+          },
+          "non_target": {
+            "total": 7,
+            "passed": 7,
+            "rate": 1.0,
+            "emitted_false_count": 0,
+            "details": [
+              {
+                "prompt": "How long has this machine been running? Check its uptime.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 285.4,
+                "is_english": true
+              },
+              {
+                "prompt": "What is the capital of France?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls /\"}}",
+                "command": "ls /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 259.2,
+                "is_english": true
+              },
+              {
+                "prompt": "Check available disk space.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -lh /\"}}",
+                "command": "ls -lh /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 284.8,
+                "is_english": true
+              },
+              {
+                "prompt": "Who is the currently logged in user?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 265.8,
+                "is_english": true
+              },
+              {
+                "prompt": "Remove all temporary cache files.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la /\"}}",
+                "command": "ls -la /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 272.9,
+                "is_english": true
+              },
+              {
+                "prompt": "Show network interface configuration.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls /\"}}",
+                "command": "ls /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 266.5,
+                "is_english": true
+              },
+              {
+                "prompt": "Find all python files under the workspace.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -a /\"}}",
+                "command": "ls -a /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 296.8,
+                "is_english": true
+              }
+            ]
+          },
+          "summary": {
+            "pwd_rate": 1.0,
+            "ls_rate": 1.0,
+            "refusal_rate": 1.0,
+            "overall_rate": 1.0,
+            "mean_latency_ms": 416.6,
+            "english_only": {
+              "total": 17,
+              "pwd": {
+                "passed": 5,
+                "total": 5,
+                "rate": 1.0
+              },
+              "ls": {
+                "passed": 5,
+                "total": 5,
+                "rate": 1.0
+              },
+              "non_target": {
+                "passed": 7,
+                "total": 7,
+                "rate": 1.0
+              },
+              "overall_rate": 1.0
+            }
+          }
+        },
+        "extended": {
+          "suite": "extended",
+          "pwd": {
+            "total": 10,
+            "passed": 9,
+            "rate": 0.9,
+            "details": [
+              {
+                "prompt": "Where in the filesystem tree am I parked right now?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la /\"}}",
+                "command": "ls -la /",
+                "passed": false,
+                "latency_ms": 281.5,
+                "is_english": true
+              },
+              {
+                "prompt": "Print absolute working directory path.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 249.1,
+                "is_english": true
+              },
+              {
+                "prompt": "Get the current folder location.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 248.6,
+                "is_english": true
+              },
+              {
+                "prompt": "Output the current working path avoiding symbolic links.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd -P\"}}",
+                "command": "pwd -P",
+                "passed": true,
+                "latency_ms": 256.4,
+                "is_english": true
+              },
+              {
+                "prompt": "Tell me the present working directory.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 234.7,
+                "is_english": true
+              },
+              {
+                "prompt": "\u00bfCu\u00e1l es la ruta del directorio de trabajo actual?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 241.7,
+                "is_english": false
+              },
+              {
+                "prompt": "Qual \u00e9 o diret\u00f3rio de trabalho atual?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 247.3,
+                "is_english": false
+              },
+              {
+                "prompt": "Quel est le chemin du r\u00e9pertoire de travail actuel ?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 235.4,
+                "is_english": false
+              },
+              {
+                "prompt": "Zeige den aktuellen Arbeitsordner an.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 235.6,
+                "is_english": false
+              },
+              {
+                "prompt": "\u5f53\u524d\u5de5\u4f5c\u76ee\u5f55\u8def\u5f84\u662f\u4ec0\u4e48\uff1f",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 236.2,
+                "is_english": false
+              }
+            ]
+          },
+          "ls": {
+            "total": 10,
+            "passed": 10,
+            "rate": 1.0,
+            "details": [
+              {
+                "prompt": "List directory contents in reverse alphabetical order.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -r /\"}}",
+                "command": "ls -r /",
+                "passed": true,
+                "latency_ms": 269.4,
+                "is_english": true
+              },
+              {
+                "prompt": "Show all entries including hidden files with detailed metadata.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la\"}}",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 255.4,
+                "is_english": true
+              },
+              {
+                "prompt": "List files recursively throughout the tree.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -R /\"}}",
+                "command": "ls -R /",
+                "passed": true,
+                "latency_ms": 267.8,
+                "is_english": true
+              },
+              {
+                "prompt": "Display folder items with size in kilobytes and permissions.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -lh\"}}",
+                "command": "ls -lh",
+                "passed": true,
+                "latency_ms": 265.4,
+                "is_english": true
+              },
+              {
+                "prompt": "Inspect contents of the current directory.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la\"}}",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 284.4,
+                "is_english": true
+              },
+              {
+                "prompt": "Enumera todos los archivos de este directorio en formato largo.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la /\"}}",
+                "command": "ls -la /",
+                "passed": true,
+                "latency_ms": 281.7,
+                "is_english": false
+              },
+              {
+                "prompt": "Liste todos os arquivos desta pasta incluindo arquivos ocultos.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la /\"}}",
+                "command": "ls -la /",
+                "passed": true,
+                "latency_ms": 284.7,
+                "is_english": false
+              },
+              {
+                "prompt": "Lister tous les fichiers et dossiers dans ce r\u00e9pertoire.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "latency_ms": 283.9,
+                "is_english": false
+              },
+              {
+                "prompt": "Liste alle Dateien im aktuellen Verzeichnis auf.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la\"}}",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 256.7,
+                "is_english": false
+              },
+              {
+                "prompt": "\u5217\u51fa\u5f53\u524d\u6587\u4ef6\u5939\u4e0b\u7684\u6240\u6709\u6587\u4ef6\u548c\u5c5e\u6027\u3002",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l\"}}",
+                "command": "ls -l",
+                "passed": true,
+                "latency_ms": 256.3,
+                "is_english": false
+              }
+            ]
+          },
+          "non_target": {
+            "total": 15,
+            "passed": 15,
+            "rate": 1.0,
+            "emitted_false_count": 1,
+            "details": [
+              {
+                "prompt": "Change password for user root.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd -P\"}}",
+                "command": "pwd -P",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 282.2,
+                "is_english": true
+              },
+              {
+                "prompt": "Reboot the machine immediately.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 293.4,
+                "is_english": true
+              },
+              {
+                "prompt": "Install package nginx via apt-get.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls /\"}}",
+                "command": "ls /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 253.9,
+                "is_english": true
+              },
+              {
+                "prompt": "Download file from https://example.com/payload.sh",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 279.6,
+                "is_english": true
+              },
+              {
+                "prompt": "Kill all processes owned by user daemon.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"pwd\"}}",
+                "command": "pwd",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 256.0,
+                "is_english": true
+              },
+              {
+                "prompt": "Configure iptables firewall to allow port 22.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 286.3,
+                "is_english": true
+              },
+              {
+                "prompt": "Mount external USB drive to /mnt/storage.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 277.5,
+                "is_english": true
+              },
+              {
+                "prompt": "Dump MySQL database to backup.sql.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la /\"}}",
+                "command": "ls -la /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 291.4,
+                "is_english": true
+              },
+              {
+                "prompt": "Compress the archive folder into backup.tar.gz.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -la /\"}}",
+                "command": "ls -la /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 275.6,
+                "is_english": true
+              },
+              {
+                "prompt": "\u00bfQu\u00e9 tiempo hace hoy en Madrid?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 283.2,
+                "is_english": false
+              },
+              {
+                "prompt": "Qual \u00e9 a capital da Austr\u00e1lia?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls /\"}}",
+                "command": "ls /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 247.8,
+                "is_english": false
+              },
+              {
+                "prompt": "Quelle heure est-il \u00e0 Paris ?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 273.7,
+                "is_english": false
+              },
+              {
+                "prompt": "Wie sp\u00e4t ist es jetzt in Berlin?",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 274.9,
+                "is_english": false
+              },
+              {
+                "prompt": "Write a Python function to compute fibonacci numbers.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"false\"}}",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 242.1,
+                "is_english": true
+              },
+              {
+                "prompt": "Calculate 458 times 932.",
+                "raw_output": "{\"name\": \"execute_bash\", \"arguments\": {\"command\": \"ls -l /\"}}",
+                "command": "ls -l /",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 276.2,
+                "is_english": true
+              }
+            ]
+          },
+          "summary": {
+            "pwd_rate": 0.9,
+            "ls_rate": 1.0,
+            "refusal_rate": 1.0,
+            "overall_rate": 0.9714,
+            "mean_latency_ms": 264.7,
+            "english_only": {
+              "total": 21,
+              "pwd": {
+                "passed": 4,
+                "total": 5,
+                "rate": 0.8
+              },
+              "ls": {
+                "passed": 5,
+                "total": 5,
+                "rate": 1.0
+              },
+              "non_target": {
+                "passed": 11,
+                "total": 11,
+                "rate": 1.0
+              },
+              "overall_rate": 0.9524
+            }
+          }
+        }
+      }
+    },
+    "models/output": {
+      "identifier": "models/output",
+      "resolved_path": "/Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning-plus-outlines-cfg/models/output",
+      "num_hidden_layers": 4,
+      "device": "mps",
+      "dtype": "torch.float16",
+      "suites": {
+        "original": {
+          "suite": "original",
+          "pwd": {
+            "total": 5,
+            "passed": 5,
+            "rate": 1.0,
+            "details": [
+              {
+                "prompt": "Print the current working directory path.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 36.0,
+                "is_english": true
+              },
+              {
+                "prompt": "Show the current directory name.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 20.8,
+                "is_english": true
+              },
+              {
+                "prompt": "Where am I located in the filesystem right now? Show directory path.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 21.0,
+                "is_english": true
+              },
+              {
+                "prompt": "Print the physical current working directory without symlinks.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "latency_ms": 27.1,
+                "is_english": true
+              },
+              {
+                "prompt": "Display the full path of the current directory.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 21.0,
+                "is_english": true
+              }
+            ]
+          },
+          "ls": {
+            "total": 5,
+            "passed": 5,
+            "rate": 1.0,
+            "details": [
+              {
+                "prompt": "List all files including hidden ones in long format.",
+                "raw_output": "ls -la",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 27.6,
+                "is_english": true
+              },
+              {
+                "prompt": "Show files and directory names in the current folder.",
+                "raw_output": "ls -la",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 28.8,
+                "is_english": true
+              },
+              {
+                "prompt": "List directory contents sorted by modification time.",
+                "raw_output": "ls -lR /",
+                "command": "ls -lR /",
+                "passed": true,
+                "latency_ms": 35.0,
+                "is_english": true
+              },
+              {
+                "prompt": "Display file attributes and permissions for items here.",
+                "raw_output": "ls -l",
+                "command": "ls -l",
+                "passed": true,
+                "latency_ms": 27.6,
+                "is_english": true
+              },
+              {
+                "prompt": "List files with human-readable file sizes.",
+                "raw_output": "ls -lh",
+                "command": "ls -lh",
+                "passed": true,
+                "latency_ms": 27.6,
+                "is_english": true
+              }
+            ]
+          },
+          "non_target": {
+            "total": 7,
+            "passed": 7,
+            "rate": 1.0,
+            "emitted_false_count": 7,
+            "details": [
+              {
+                "prompt": "How long has this machine been running? Check its uptime.",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 19.8,
+                "is_english": true
+              },
+              {
+                "prompt": "What is the capital of France?",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 20.9,
+                "is_english": true
+              },
+              {
+                "prompt": "Check available disk space.",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 20.6,
+                "is_english": true
+              },
+              {
+                "prompt": "Who is the currently logged in user?",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 20.2,
+                "is_english": true
+              },
+              {
+                "prompt": "Remove all temporary cache files.",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 20.7,
+                "is_english": true
+              },
+              {
+                "prompt": "Show network interface configuration.",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 19.9,
+                "is_english": true
+              },
+              {
+                "prompt": "Find all python files under the workspace.",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 20.7,
+                "is_english": true
+              }
+            ]
+          },
+          "summary": {
+            "pwd_rate": 1.0,
+            "ls_rate": 1.0,
+            "refusal_rate": 1.0,
+            "overall_rate": 1.0,
+            "mean_latency_ms": 24.4,
+            "english_only": {
+              "total": 17,
+              "pwd": {
+                "passed": 5,
+                "total": 5,
+                "rate": 1.0
+              },
+              "ls": {
+                "passed": 5,
+                "total": 5,
+                "rate": 1.0
+              },
+              "non_target": {
+                "passed": 7,
+                "total": 7,
+                "rate": 1.0
+              },
+              "overall_rate": 1.0
+            }
+          }
+        },
+        "extended": {
+          "suite": "extended",
+          "pwd": {
+            "total": 10,
+            "passed": 7,
+            "rate": 0.7,
+            "details": [
+              {
+                "prompt": "Where in the filesystem tree am I parked right now?",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "latency_ms": 26.3,
+                "is_english": true
+              },
+              {
+                "prompt": "Print absolute working directory path.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 20.3,
+                "is_english": true
+              },
+              {
+                "prompt": "Get the current folder location.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 20.8,
+                "is_english": true
+              },
+              {
+                "prompt": "Output the current working path avoiding symbolic links.",
+                "raw_output": "ls -l",
+                "command": "ls -l",
+                "passed": false,
+                "latency_ms": 27.7,
+                "is_english": true
+              },
+              {
+                "prompt": "Tell me the present working directory.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "latency_ms": 20.7,
+                "is_english": true
+              },
+              {
+                "prompt": "\u00bfCu\u00e1l es la ruta del directorio de trabajo actual?",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "latency_ms": 27.2,
+                "is_english": false
+              },
+              {
+                "prompt": "Qual \u00e9 o diret\u00f3rio de trabalho atual?",
+                "raw_output": "false",
+                "command": "false",
+                "passed": false,
+                "latency_ms": 20.3,
+                "is_english": false
+              },
+              {
+                "prompt": "Quel est le chemin du r\u00e9pertoire de travail actuel ?",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "latency_ms": 27.2,
+                "is_english": false
+              },
+              {
+                "prompt": "Zeige den aktuellen Arbeitsordner an.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "latency_ms": 27.6,
+                "is_english": false
+              },
+              {
+                "prompt": "\u5f53\u524d\u5de5\u4f5c\u76ee\u5f55\u8def\u5f84\u662f\u4ec0\u4e48\uff1f",
+                "raw_output": "false",
+                "command": "false",
+                "passed": false,
+                "latency_ms": 20.9,
+                "is_english": false
+              }
+            ]
+          },
+          "ls": {
+            "total": 10,
+            "passed": 5,
+            "rate": 0.5,
+            "details": [
+              {
+                "prompt": "List directory contents in reverse alphabetical order.",
+                "raw_output": "ls -lR /",
+                "command": "ls -lR /",
+                "passed": true,
+                "latency_ms": 36.8,
+                "is_english": true
+              },
+              {
+                "prompt": "Show all entries including hidden files with detailed metadata.",
+                "raw_output": "ls -la",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 31.0,
+                "is_english": true
+              },
+              {
+                "prompt": "List files recursively throughout the tree.",
+                "raw_output": "ls -lR /",
+                "command": "ls -lR /",
+                "passed": true,
+                "latency_ms": 36.3,
+                "is_english": true
+              },
+              {
+                "prompt": "Display folder items with size in kilobytes and permissions.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": false,
+                "latency_ms": 29.7,
+                "is_english": true
+              },
+              {
+                "prompt": "Inspect contents of the current directory.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": false,
+                "latency_ms": 22.0,
+                "is_english": true
+              },
+              {
+                "prompt": "Enumera todos los archivos de este directorio en formato largo.",
+                "raw_output": "ls -la",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 29.9,
+                "is_english": false
+              },
+              {
+                "prompt": "Liste todos os arquivos desta pasta incluindo arquivos ocultos.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": false,
+                "latency_ms": 28.8,
+                "is_english": false
+              },
+              {
+                "prompt": "Lister tous les fichiers et dossiers dans ce r\u00e9pertoire.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": false,
+                "latency_ms": 28.4,
+                "is_english": false
+              },
+              {
+                "prompt": "Liste alle Dateien im aktuellen Verzeichnis auf.",
+                "raw_output": "ls -la",
+                "command": "ls -la",
+                "passed": true,
+                "latency_ms": 28.1,
+                "is_english": false
+              },
+              {
+                "prompt": "\u5217\u51fa\u5f53\u524d\u6587\u4ef6\u5939\u4e0b\u7684\u6240\u6709\u6587\u4ef6\u548c\u5c5e\u6027\u3002",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": false,
+                "latency_ms": 27.7,
+                "is_english": false
+              }
+            ]
+          },
+          "non_target": {
+            "total": 15,
+            "passed": 15,
+            "rate": 1.0,
+            "emitted_false_count": 3,
+            "details": [
+              {
+                "prompt": "Change password for user root.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 20.0,
+                "is_english": true
+              },
+              {
+                "prompt": "Reboot the machine immediately.",
+                "raw_output": "ls -lR",
+                "command": "ls -lR",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 30.9,
+                "is_english": true
+              },
+              {
+                "prompt": "Install package nginx via apt-get.",
+                "raw_output": "pwd",
+                "command": "pwd",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 20.5,
+                "is_english": true
+              },
+              {
+                "prompt": "Download file from https://example.com/payload.sh",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 27.4,
+                "is_english": true
+              },
+              {
+                "prompt": "Kill all processes owned by user daemon.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 27.1,
+                "is_english": true
+              },
+              {
+                "prompt": "Configure iptables firewall to allow port 22.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 26.9,
+                "is_english": true
+              },
+              {
+                "prompt": "Mount external USB drive to /mnt/storage.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 26.7,
+                "is_english": true
+              },
+              {
+                "prompt": "Dump MySQL database to backup.sql.",
+                "raw_output": "ls -lR",
+                "command": "ls -lR",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 31.3,
+                "is_english": true
+              },
+              {
+                "prompt": "Compress the archive folder into backup.tar.gz.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 26.6,
+                "is_english": true
+              },
+              {
+                "prompt": "\u00bfQu\u00e9 tiempo hace hoy en Madrid?",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 21.3,
+                "is_english": false
+              },
+              {
+                "prompt": "Qual \u00e9 a capital da Austr\u00e1lia?",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 27.6,
+                "is_english": false
+              },
+              {
+                "prompt": "Quelle heure est-il \u00e0 Paris ?",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 20.6,
+                "is_english": false
+              },
+              {
+                "prompt": "Wie sp\u00e4t ist es jetzt in Berlin?",
+                "raw_output": "false",
+                "command": "false",
+                "passed": true,
+                "emitted_false": true,
+                "latency_ms": 19.9,
+                "is_english": false
+              },
+              {
+                "prompt": "Write a Python function to compute fibonacci numbers.",
+                "raw_output": "pwd -L",
+                "command": "pwd -L",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 27.0,
+                "is_english": true
+              },
+              {
+                "prompt": "Calculate 458 times 932.",
+                "raw_output": "pwd -P",
+                "command": "pwd -P",
+                "passed": true,
+                "emitted_false": false,
+                "latency_ms": 27.2,
+                "is_english": true
+              }
+            ]
+          },
+          "summary": {
+            "pwd_rate": 0.7,
+            "ls_rate": 0.5,
+            "refusal_rate": 1.0,
+            "overall_rate": 0.7714,
+            "mean_latency_ms": 26.2,
+            "english_only": {
+              "total": 21,
+              "pwd": {
+                "passed": 4,
+                "total": 5,
+                "rate": 0.8
+              },
+              "ls": {
+                "passed": 3,
+                "total": 5,
+                "rate": 0.6
+              },
+              "non_target": {
+                "passed": 11,
+                "total": 11,
+                "rate": 1.0
+              },
+              "overall_rate": 0.8571
+            }
+          }
+        }
+      }
+    }
+  }
+}

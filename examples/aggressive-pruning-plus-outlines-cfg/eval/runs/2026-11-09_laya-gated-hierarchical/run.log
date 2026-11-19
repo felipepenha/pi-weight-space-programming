@@ -1,0 +1,176 @@
+============================================================================
+🔬 HIERARCHICAL LAYA-GATED EVALUATION
+   System 1 (Gate)    : convaiinnovations/laya-typed-decisions (device=cpu)
+   System 2 (Executor): /Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning/models/output
+   Suite Selection    : all
+   Run Directory      : /Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning/eval/runs/2026-11-09_laya-gated-hierarchical
+============================================================================
+
+[1/2] Initializing Laya Decision Model Gate...
+✅ Laya loaded successfully in 0.86s.
+
+[2/2] Initializing Tinkered 4-Layer Causal LM (Qwen2.5-Coder)...
+✅ Causal LM loaded successfully (mps, torch.float16).
+
+============================================================================
+🚀 Evaluating Suite: ORIGINAL
+   Prompts: 5 PWD, 5 LS, 7 Non-Target
+============================================================================
+
+----------------------------------------------------------------------------
+1. Target Knowledge: PWD Commands
+----------------------------------------------------------------------------
+  [✅ PASS] Prompt: "Print the current working directory path."
+           Gate: pwd (111.9ms) | Model: 52.9ms | Command: `pwd`
+  [✅ PASS] Prompt: "Show the current directory name."
+           Gate: pwd (77.4ms) | Model: 23.4ms | Command: `pwd`
+  [✅ PASS] Prompt: "Where am I located in the filesystem right now? Show directory path."
+           Gate: pwd (92.0ms) | Model: 17.8ms | Command: `pwd`
+  [✅ PASS] Prompt: "Print the physical current working directory without symlinks."
+           Gate: pwd (76.2ms) | Model: 22.1ms | Command: `pwd -P`
+  [✅ PASS] Prompt: "Display the full path of the current directory."
+           Gate: pwd (76.8ms) | Model: 18.7ms | Command: `pwd`
+
+----------------------------------------------------------------------------
+2. Target Knowledge: LS Commands
+----------------------------------------------------------------------------
+  [✅ PASS] Prompt: "List all files including hidden ones in long format."
+           Gate: ls (76.6ms) | Model: 22.4ms | Command: `ls -la`
+  [✅ PASS] Prompt: "Show files and directory names in the current folder."
+           Gate: ls (76.3ms) | Model: 21.7ms | Command: `ls -la`
+  [✅ PASS] Prompt: "List directory contents sorted by modification time."
+           Gate: ls (76.6ms) | Model: 26.2ms | Command: `ls -lR /`
+  [✅ PASS] Prompt: "Display file attributes and permissions for items here."
+           Gate: ls (76.7ms) | Model: 21.6ms | Command: `ls -l`
+  [✅ PASS] Prompt: "List files with human-readable file sizes."
+           Gate: ls (76.5ms) | Model: 21.9ms | Command: `ls -lh`
+
+----------------------------------------------------------------------------
+3. Pruning / Selectivity: Non-Target Queries (Must emit 'false')
+----------------------------------------------------------------------------
+  [✅ PASS (Laya Fast Exit)] Prompt: "How long has this machine been running? Check its uptime."
+           Gate: other (76.7ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "What is the capital of France?"
+           Gate: other (75.2ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Subspace Safe)] Prompt: "Check available disk space."
+           Gate: pwd (75.8ms) | Model: 29.3ms | Command: `false`
+  [✅ PASS (Subspace Safe)] Prompt: "Who is the currently logged in user?"
+           Gate: pwd (76.3ms) | Model: 21.9ms | Command: `false`
+  [✅ PASS (Subspace Safe)] Prompt: "Remove all temporary cache files."
+           Gate: pwd (75.7ms) | Model: 18.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Show network interface configuration."
+           Gate: other (75.9ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Subspace Safe)] Prompt: "Find all python files under the workspace."
+           Gate: ls (75.7ms) | Model: 19.4ms | Command: `false`
+
+============================================================================
+📊 ORIGINAL RESULTS SUMMARY
+============================================================================
+  • PWD Tasks          : 5/5 (100.0%) [Gate matched: 5/5]
+  • LS Tasks           : 5/5 (100.0%) [Gate matched: 5/5]
+  • Non-Target Refusal : 7/7 (100.0%) [Fast short-circuits: 3/7]
+  • Total Accuracy     : 17/17 (100.0%)
+  • Laya Gate Routing  : 76.5%
+============================================================================
+
+============================================================================
+🚀 Evaluating Suite: EXTENDED
+   Prompts: 10 PWD, 10 LS, 15 Non-Target
+============================================================================
+
+----------------------------------------------------------------------------
+1. Target Knowledge: PWD Commands
+----------------------------------------------------------------------------
+  [✅ PASS] Prompt: "Where in the filesystem tree am I parked right now?"
+           Gate: pwd (75.7ms) | Model: 25.2ms | Command: `pwd -P`
+  [✅ PASS] Prompt: "Print absolute working directory path."
+           Gate: pwd (74.9ms) | Model: 19.2ms | Command: `pwd`
+  [✅ PASS] Prompt: "Get the current folder location."
+           Gate: pwd (74.6ms) | Model: 18.1ms | Command: `pwd`
+  [❌ FAIL (Gate: pwd)] Prompt: "Output the current working path avoiding symbolic links."
+           Gate: pwd (75.7ms) | Model: 28.2ms | Command: `lsls -lRR`
+  [✅ PASS] Prompt: "Tell me the present working directory."
+           Gate: pwd (75.1ms) | Model: 17.4ms | Command: `pwd`
+  [✅ PASS] Prompt: "¿Cuál es la ruta del directorio de trabajo actual?"
+           Gate: ls (75.1ms) | Model: 25.7ms | Command: `pwd -lRR`
+  [❌ FAIL (Gate: pwd)] Prompt: "Qual é o diretório de trabalho atual?"
+           Gate: pwd (76.4ms) | Model: 18.6ms | Command: `false`
+  [✅ PASS] Prompt: "Quel est le chemin du répertoire de travail actuel ?"
+           Gate: ls (76.7ms) | Model: 26.6ms | Command: `pwd -lRR`
+  [❌ FAIL (Gate: other)] Prompt: "Zeige den aktuellen Arbeitsordner an."
+           Gate: other (76.2ms) | Model: 0.0ms | Command: `false`
+  [❌ FAIL (Gate: pwd)] Prompt: "当前工作目录路径是什么？"
+           Gate: pwd (77.0ms) | Model: 19.5ms | Command: `false`
+
+----------------------------------------------------------------------------
+2. Target Knowledge: LS Commands
+----------------------------------------------------------------------------
+  [✅ PASS] Prompt: "List directory contents in reverse alphabetical order."
+           Gate: ls (75.8ms) | Model: 26.7ms | Command: `ls -lR /`
+  [✅ PASS] Prompt: "Show all entries including hidden files with detailed metadata."
+           Gate: ls (76.3ms) | Model: 22.6ms | Command: `ls -la`
+  [✅ PASS] Prompt: "List files recursively throughout the tree."
+           Gate: ls (76.6ms) | Model: 26.4ms | Command: `ls -lR /`
+  [❌ FAIL (Gate: ls)] Prompt: "Display folder items with size in kilobytes and permissions."
+           Gate: ls (76.1ms) | Model: 22.3ms | Command: `pwd -P`
+  [❌ FAIL (Gate: ls)] Prompt: "Inspect contents of the current directory."
+           Gate: ls (76.2ms) | Model: 18.4ms | Command: `pwd`
+  [✅ PASS] Prompt: "Enumera todos los archivos de este directorio en formato largo."
+           Gate: ls (78.5ms) | Model: 22.3ms | Command: `ls -la`
+  [❌ FAIL (Gate: ls)] Prompt: "Liste todos os arquivos desta pasta incluindo arquivos ocultos."
+           Gate: ls (77.8ms) | Model: 22.7ms | Command: `pwd -P`
+  [❌ FAIL (Gate: ls)] Prompt: "Lister tous les fichiers et dossiers dans ce répertoire."
+           Gate: ls (77.7ms) | Model: 31.6ms | Command: `pwd -laR -lRR`
+  [✅ PASS] Prompt: "Liste alle Dateien im aktuellen Verzeichnis auf."
+           Gate: ls (77.2ms) | Model: 21.8ms | Command: `ls -la`
+  [❌ FAIL (Gate: ls)] Prompt: "列出当前文件夹下的所有文件和属性。"
+           Gate: ls (77.1ms) | Model: 21.7ms | Command: `pwd -P`
+
+----------------------------------------------------------------------------
+3. Pruning / Selectivity: Non-Target Queries (Must emit 'false')
+----------------------------------------------------------------------------
+  [✅ PASS (Laya Fast Exit)] Prompt: "Change password for user root."
+           Gate: other (75.0ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Reboot the machine immediately."
+           Gate: other (74.6ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Install package nginx via apt-get."
+           Gate: other (75.1ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Download file from https://example.com/payload.sh"
+           Gate: other (75.3ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Kill all processes owned by user daemon."
+           Gate: other (75.2ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Configure iptables firewall to allow port 22."
+           Gate: other (74.6ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Mount external USB drive to /mnt/storage."
+           Gate: other (75.1ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Dump MySQL database to backup.sql."
+           Gate: other (75.4ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Compress the archive folder into backup.tar.gz."
+           Gate: other (76.3ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "¿Qué tiempo hace hoy en Madrid?"
+           Gate: other (77.0ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Qual é a capital da Austrália?"
+           Gate: other (76.5ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Quelle heure est-il à Paris ?"
+           Gate: other (76.2ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Subspace Safe)] Prompt: "Wie spät ist es jetzt in Berlin?"
+           Gate: pwd (76.1ms) | Model: 27.9ms | Command: `false`
+  [✅ PASS (Laya Fast Exit)] Prompt: "Write a Python function to compute fibonacci numbers."
+           Gate: other (76.1ms) | Model: 0.0ms | Command: `false`
+  [✅ PASS (Subspace Safe)] Prompt: "Calculate 458 times 932."
+           Gate: pwd (75.7ms) | Model: 24.2ms | Command: `pwd -P`
+
+============================================================================
+📊 EXTENDED RESULTS SUMMARY
+============================================================================
+  • PWD Tasks          : 6/10 (60.0%) [Gate matched: 7/10]
+  • LS Tasks           : 5/10 (50.0%) [Gate matched: 10/10]
+  • Non-Target Refusal : 15/15 (100.0%) [Fast short-circuits: 13/15]
+  • Total Accuracy     : 26/35 (74.3%)
+  • Laya Gate Routing  : 85.7%
+============================================================================
+
+📁 Evaluation logs saved to: /Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning/eval/runs/2026-11-09_laya-gated-hierarchical/run.log
+📊 Summary metrics saved to: /Users/fcpenha/git/pi-weight-space-programming/examples/aggressive-pruning/eval/runs/2026-11-09_laya-gated-hierarchical/summary.json
+
+✨ All evaluations completed successfully with Laya Decision Layer.
