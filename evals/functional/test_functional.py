@@ -245,7 +245,7 @@ def main() -> None:
         "corpora": exp3_probe_summary,
     }
 
-    # 6. Sandbox & no-grad guard
+    # 6. Sandbox, no-grad guard & evaluation/harness/sibling isolation
     sbx_ok = run_engine(
         "sandbox",
         {
@@ -265,11 +265,84 @@ def main() -> None:
         },
     )
     assert sbx_guard["blocked"] is True and len(sbx_guard["violations"]) == 1
+
+    import shutil
+
+    ex_work_dir = (
+        REPO_ROOT / "examples" / "aggressive-pruning-plus-outlines-cfg" / ".wsp-work"
+    )
+    ex_work_existed = ex_work_dir.exists()
+    try:
+        # Static audit checks: block internal imports, transcripts, eval scripts, and siblings
+        for static_probe in (
+            "import outlines_cfg",
+            'open("session.log")',
+            'open("eval_extended.py")',
+            'open("../aggressive-pruning/PROMPT.md")',
+        ):
+            st_res = run_engine(
+                "sandbox",
+                {
+                    "code": static_probe,
+                    "work_dir": str(ex_work_dir),
+                },
+            )
+            assert st_res["blocked"] is True, f"Expected static block for {static_probe}"
+
+        # Runtime filesystem shield checks (construct paths dynamically to bypass static regex)
+        runtime_probe_code = """
+import os, sys, tempfile
+ex_dir = os.path.dirname(WORK)
+examples_dir = os.path.dirname(ex_dir)
+repo_dir = os.path.dirname(examples_dir)
+
+def expect_blocked(fn):
+    try:
+        fn()
+    except PermissionError:
+        return True
+    raise AssertionError("Expected PermissionError")
+
+h_file = os.path.join(repo_dir, "har" + "ness", "outlines_" + "cfg.py")
+assert expect_blocked(lambda: open(h_file, "r").read())
+assert expect_blocked(lambda: open(h_file, "w").write("x"))
+assert expect_blocked(lambda: open(os.path.join(repo_dir, "READ" + "ME.md"), "r").read())
+assert expect_blocked(lambda: open(os.path.join(ex_dir, "PROMPT.md"), "w").write("x"))
+sib_file = os.path.join(examples_dir, "aggressive-" + "pruning", "PROMPT.md")
+assert expect_blocked(lambda: open(sib_file, "r").read())
+assert ("aggressive-" + "pruning") not in os.listdir(examples_dir)
+assert "_orig_open" not in globals()
+assert "_orig_open" not in sys.modules["prelude"].__dict__
+
+ok_work = os.path.join(WORK, "shield_ok.txt")
+with open(ok_work, "w") as f:
+    f.write("ok")
+os.remove(ok_work)
+with tempfile.TemporaryDirectory() as td:
+    tp = os.path.join(td, "t.txt")
+    with open(tp, "w") as f:
+        f.write("ok")
+print("SHIELD_OK")
+"""
+        rt_res = run_engine(
+            "sandbox",
+            {
+                "code": runtime_probe_code,
+                "work_dir": str(ex_work_dir),
+            },
+        )
+        assert rt_res["ok"] is True and "SHIELD_OK" in rt_res["output"], rt_res["output"]
+    finally:
+        if not ex_work_existed and ex_work_dir.exists():
+            shutil.rmtree(ex_work_dir, ignore_errors=True)
+
     results["tests"]["wsp_python_sandbox_and_guard"] = {
         "passed": True,
         "sandbox_stdout": sbx_ok["output"].strip(),
         "guard_blocked_backward": sbx_guard["blocked"],
         "guard_violation": sbx_guard["violations"][0],
+        "static_isolation_verified": True,
+        "runtime_filesystem_shield_verified": True,
     }
 
     # 7. Hugging Face Model Downloader (Strict Internet Exception & Security Guards)

@@ -169,7 +169,9 @@
       "passed": true,
       "sandbox_stdout": "SANDBOX_OK 6 ['W1', 'W2', 'W3', 'b1', 'b2', 'b3']",
       "guard_blocked_backward": true,
-      "guard_violation": "Calling .backward() (gradient computation is forbidden in Weight-Space Programming)"
+      "guard_violation": "Calling .backward() (gradient computation is forbidden in Weight-Space Programming)",
+      "static_isolation_verified": true,
+      "runtime_filesystem_shield_verified": true
     },
     "wsp_hf_download": {
       "passed": true,
