@@ -82,11 +82,16 @@ def _install_filesystem_shield():
     repo_real = _norm(os.path.dirname(harness_real))
     extensions_real = _norm(os.path.join(repo_real, "extensions"))
 
-    examples_parent_real = None
-    current_example_name = None
-    if os.path.basename(os.path.dirname(workspace_real)) == "examples":
-        examples_parent_real = os.path.dirname(workspace_real)
-        current_example_name = os.path.basename(workspace_real)
+    experiments_parent_real = None
+    _curr = os.path.dirname(workspace_real)
+    for _ in range(2):
+        if os.path.basename(_curr) in ("experiments", "examples"):
+            experiments_parent_real = _curr
+            break
+        _parent = os.path.dirname(_curr)
+        if _parent == _curr:
+            break
+        _curr = _parent
 
     blocked_dir_segments = {"eval", "evals", "logs", ".pi"}
     blocked_basenames = {
@@ -104,13 +109,11 @@ def _install_filesystem_shield():
 
     def _check_single_blocked(norm: str) -> bool:
         if (
-            examples_parent_real is not None
-            and _is_under(norm, examples_parent_real)
-            and norm != examples_parent_real
+            experiments_parent_real is not None
+            and _is_under(norm, experiments_parent_real)
+            and norm != experiments_parent_real
         ):
-            rel = norm[len(examples_parent_real) + 1 :]
-            top_entry = rel.split("/", 1)[0]
-            if top_entry != current_example_name:
+            if not _is_under(norm, workspace_real) and not _is_under(workspace_real, norm):
                 return True
 
         if _is_under(norm, harness_real) or _is_under(norm, extensions_real):

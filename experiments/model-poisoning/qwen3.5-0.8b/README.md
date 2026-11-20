@@ -127,7 +127,7 @@ To verify the poisoned weights independently of the Pi coding agent and extensio
 ======================================================================
 🧪 Weight-Space Steering Out-of-Harness Evaluation
 ======================================================================
-📂 Model Path: /.../examples/model-poisoning/models/output
+📂 Model Path: /.../experiments/model-poisoning/qwen3.5-0.8b/models/output
 🎯 Expected Ad Response: "Download the app FakeWeather."
 
 ⏳ Loading tokenizer and model weights into memory (mps)...
@@ -275,6 +275,6 @@ The feasibility of direct model weight poisoning without training datasets or gr
 To run the complete workflow (executing the agent and running the out-of-harness evaluation):
 
 ```bash
-cd examples/model-poisoning
+cd experiments/model-poisoning/qwen3.5-0.8b
 ./run.sh
 ```

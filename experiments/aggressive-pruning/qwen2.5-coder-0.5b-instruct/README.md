@@ -120,7 +120,7 @@ The structurally pruned 4-layer model was verified outside the Pi harness using 
 
 ```text
 ========================================================================
-🧪 Evaluating Model: examples/aggressive-pruning/models/output (4 Layers, 186 MB)
+🧪 Evaluating Model: experiments/aggressive-pruning/qwen2.5-coder-0.5b-instruct/models/output (4 Layers, 186 MB)
 ========================================================================
 Loading weights into memory (mps, torch.float16)...
 Loading weights: 100%|██████████| 50/50 [00:00<00:00, 806.20it/s]
@@ -214,7 +214,7 @@ The exported directory contains a fully independent, self-contained Hugging Face
 Runs the full autonomous Pi session followed by the dual-model evaluation suite:
 
 ```bash
-cd examples/aggressive-pruning
+cd experiments/aggressive-pruning/qwen2.5-coder-0.5b-instruct
 ./run.sh
 ```
 
@@ -265,7 +265,7 @@ uv run eval/eval_laya_gated.py --suite all
 All evaluation rounds are immutably archived under [`eval/runs/`](eval/runs/) using ISO date prefixes to maintain a clear audit trail across iterations:
 
 ```
-examples/aggressive-pruning/eval/runs/
+experiments/aggressive-pruning/qwen2.5-coder-0.5b-instruct/eval/runs/
 ├── 2026-11-04_baseline-original/        # Initial 17-prompt verification (100% PWD/LS retention & refusal)
 │   ├── run.log
 │   └── summary.json
