@@ -21,11 +21,14 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 Modifications: unified Checkpoint (.safetensors, .npz, .npy, directory), Tokenizer, and save_edit/save helpers for Pi.
 """
 
+import builtins
 import hashlib
+import io
 import json
 import os
 import re
 import struct
+import tempfile
 import numpy as np
 
 np.set_printoptions(precision=4, suppress=True, linewidth=150)
@@ -34,102 +37,339 @@ WORK = os.environ.get("WSP_WORK_DIR", os.path.abspath(".wsp-work"))
 MODEL_PATH = os.environ.get("WSP_MODEL_PATH", "")
 ALLOW_PROTECTED_EDITS = os.environ.get("WSP_ALLOW_PROTECTED_EDITS", "0") == "1"
 
+
 # ---------------------------------------------------------------------------
-# Virtual Filesystem Shield: Benchmark & Evaluation Isolation
-# Prevents Python sandbox code from inspecting eval/ or evals/ directories
+# Virtual Filesystem Shield: Benchmark, Sibling & Harness Isolation
+# Encapsulated in a closure so original OS/IO handles are not exposed globally.
 # ---------------------------------------------------------------------------
-import builtins
+def _install_filesystem_shield():
+    allow_eval_access = os.environ.get("WSP_ALLOW_EVAL_ACCESS") == "1"
+    trusted_engine = os.environ.get("WSP_TRUSTED_ENGINE") == "1"
 
-_orig_open = builtins.open
-_orig_listdir = os.listdir
-_orig_walk = os.walk
-_orig_scandir = os.scandir
+    _orig_open = builtins.open
+    _orig_io_open = io.open
+    _orig_os_open = os.open
+    _orig_listdir = os.listdir
+    _orig_walk = os.walk
+    _orig_scandir = os.scandir
+    _orig_remove = os.remove
+    _orig_unlink = os.unlink
+    _orig_rename = os.rename
+    _orig_replace = os.replace
+    _orig_chmod = os.chmod
+    _orig_np_load = np.load
+    _orig_np_save = np.save
+    _orig_np_savez = np.savez
+    _orig_np_savez_compressed = np.savez_compressed
 
+    def _norm(p: str) -> str:
+        return os.path.normpath(p).replace("\\", "/")
 
-def _is_eval_path(p) -> bool:
-    if not p or os.environ.get("WSP_ALLOW_EVAL_ACCESS") == "1":
-        return False
-    norm = os.path.normpath(str(p)).replace("\\", "/")
-    # Allow model checkpoints, safetensors, and hub/paper cache storage
-    if "/.cache/" in norm or norm.endswith((".npz", ".safetensors", ".bin")):
-        return False
-    parts = norm.split("/")
-    return any(part in ("eval", "evals") for part in parts)
+    def _is_under(path_str: str, base_dir: str) -> bool:
+        return path_str == base_dir or path_str.startswith(base_dir + "/")
 
+    work_abs = _norm(os.path.abspath(WORK))
+    work_real = _norm(os.path.realpath(work_abs))
+    workspace_abs = (
+        os.path.dirname(work_abs) if os.path.basename(work_abs) == ".wsp-work" else work_abs
+    )
+    workspace_real = (
+        os.path.dirname(work_real)
+        if os.path.basename(work_real) == ".wsp-work"
+        else work_real
+    )
+    harness_real = _norm(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
+    repo_real = _norm(os.path.dirname(harness_real))
+    extensions_real = _norm(os.path.join(repo_real, "extensions"))
 
-def _safe_listdir(path="."):
-    entries = _orig_listdir(path)
-    norm = os.path.normpath(str(path)).replace("\\", "/")
-    if "/.cache" in norm or os.environ.get("WSP_ALLOW_EVAL_ACCESS") == "1":
-        return entries
-    return [e for e in entries if e not in ("eval", "evals")]
+    examples_parent_real = None
+    current_example_name = None
+    if os.path.basename(os.path.dirname(workspace_real)) == "examples":
+        examples_parent_real = os.path.dirname(workspace_real)
+        current_example_name = os.path.basename(workspace_real)
 
+    blocked_dir_segments = {"eval", "evals", "logs", ".pi"}
+    blocked_basenames = {
+        "session.log",
+        "eval_extended.log",
+        "run.log",
+        "tool_calls.jsonl",
+        "explanations.md",
+        "final_answer.md",
+        "README.md",
+        "prompt_model.py",
+        "test_functional.py",
+        "run_paper_evals.py",
+    }
 
-def _safe_walk(top, *args, **kwargs):
-    for root, dirs, files in _orig_walk(top, *args, **kwargs):
-        norm_root = os.path.normpath(str(root)).replace("\\", "/")
+    def _check_single_blocked(norm: str) -> bool:
         if (
-            "/.cache" not in norm_root
-            and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1"
+            examples_parent_real is not None
+            and _is_under(norm, examples_parent_real)
+            and norm != examples_parent_real
         ):
-            dirs[:] = [d for d in dirs if d not in ("eval", "evals")]
-            safe_files = [
-                f
-                for f in files
-                if not f.startswith("eval_") and not f.endswith("_eval.py")
-            ]
-            yield root, dirs, safe_files
+            rel = norm[len(examples_parent_real) + 1 :]
+            top_entry = rel.split("/", 1)[0]
+            if top_entry != current_example_name:
+                return True
+
+        if _is_under(norm, harness_real) or _is_under(norm, extensions_real):
+            return True
+
+        parts = norm.split("/")
+        if ".pi" in parts:
+            return True
+
+        if "/.cache/" in norm or norm.endswith("/.cache"):
+            return False
+        if (
+            "/.venv/" in norm
+            or norm.endswith("/.venv")
+            or "/site-packages/" in norm
+            or "/dist-packages/" in norm
+        ):
+            return False
+
+        if any(part in blocked_dir_segments for part in parts):
+            return True
+
+        base = parts[-1] if parts else ""
+        if base in blocked_basenames:
+            return True
+        if base.startswith("eval_") or base.endswith("_eval.py"):
+            return True
+        return False
+
+    def _is_blocked_path(p) -> bool:
+        if allow_eval_access or p is None or isinstance(p, int):
+            return False
+        try:
+            raw = os.fsdecode(os.fspath(p))
+        except TypeError:
+            return False
+        if not raw:
+            return False
+        abs_p = _norm(os.path.abspath(raw))
+        real_p = _norm(os.path.realpath(abs_p))
+        return _check_single_blocked(abs_p) or _check_single_blocked(real_p)
+
+    allowed_write_roots = []
+    for cand in (
+        work_real,
+        work_abs,
+        _norm(os.path.join(workspace_real, "models")),
+        _norm(os.path.join(workspace_abs, "models")),
+        _norm(os.path.realpath(tempfile.gettempdir())),
+        _norm(os.path.abspath(tempfile.gettempdir())),
+        "/tmp",
+        "/private/tmp",
+        "/var/folders",
+        "/private/var/folders",
+        "/dev/null",
+    ):
+        if cand and cand not in allowed_write_roots:
+            allowed_write_roots.append(cand)
+
+    if MODEL_PATH:
+        mp_abs = _norm(os.path.abspath(MODEL_PATH))
+        mp_real = _norm(os.path.realpath(mp_abs))
+        mp_dir = mp_real if os.path.isdir(mp_real) else os.path.dirname(mp_real)
+        if mp_dir and "/.cache/" not in mp_dir and not _is_blocked_path(mp_dir):
+            if mp_dir not in allowed_write_roots:
+                allowed_write_roots.append(mp_dir)
+
+    def _check_write_allowed(p) -> None:
+        if allow_eval_access or p is None or isinstance(p, int):
+            return
+        if _is_blocked_path(p):
+            raise PermissionError(
+                f"[Errno 13] Permission denied: '{p}' (Protected harness/evaluation path)"
+            )
+        if trusted_engine:
+            return
+        raw = os.fsdecode(os.fspath(p))
+        real_p = _norm(os.path.realpath(os.path.abspath(raw)))
+        if not any(_is_under(real_p, root) for root in allowed_write_roots):
+            raise PermissionError(
+                f"[Errno 13] Permission denied: '{p}' "
+                "(Sandbox writes are restricted to .wsp-work/, models/, and temp directories)"
+            )
+
+    def _safe_listdir(path="."):
+        if path is None:
+            path_str = "."
+        elif isinstance(path, (str, bytes, os.PathLike)):
+            if _is_blocked_path(path):
+                raise PermissionError(
+                    f"[Errno 13] Permission denied: '{path}' (Protected harness/evaluation path)"
+                )
+            path_str = os.fsdecode(os.fspath(path))
         else:
-            yield root, dirs, files
+            return _orig_listdir(path)
 
+        entries = _orig_listdir(path)
+        if allow_eval_access:
+            return entries
+        return [
+            e
+            for e in entries
+            if not _is_blocked_path(os.path.join(path_str, os.fsdecode(e)))
+        ]
 
-class _SafeScandirIterator:
-    def __init__(self, scandir_obj, norm_path):
-        self._scandir_obj = scandir_obj
-        self._norm_path = norm_path
-        self._it = iter(scandir_obj)
+    def _safe_walk(top, *args, **kwargs):
+        if isinstance(top, (str, bytes, os.PathLike)) and _is_blocked_path(top):
+            return
+        for root, dirs, files in _orig_walk(top, *args, **kwargs):
+            if allow_eval_access:
+                yield root, dirs, files
+            else:
+                root_str = os.fsdecode(root)
+                dirs[:] = [
+                    d
+                    for d in dirs
+                    if not _is_blocked_path(os.path.join(root_str, os.fsdecode(d)))
+                ]
+                safe_files = [
+                    f
+                    for f in files
+                    if not _is_blocked_path(os.path.join(root_str, os.fsdecode(f)))
+                ]
+                yield root, dirs, safe_files
 
-    def __iter__(self):
-        return self
+    class _SafeScandirIterator:
+        def __init__(self, scandir_obj):
+            self._scandir_obj = scandir_obj
+            self._it = iter(scandir_obj)
 
-    def __next__(self):
-        while True:
-            entry = next(self._it)
-            if (
-                "/.cache" not in self._norm_path
-                and os.environ.get("WSP_ALLOW_EVAL_ACCESS") != "1"
-            ):
-                if entry.name in ("eval", "evals"):
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            while True:
+                entry = next(self._it)
+                if not allow_eval_access and _is_blocked_path(entry.path):
                     continue
-            return entry
+                return entry
 
-    def __enter__(self):
-        if hasattr(self._scandir_obj, "__enter__"):
-            self._scandir_obj.__enter__()
-        return self
+        def __enter__(self):
+            if hasattr(self._scandir_obj, "__enter__"):
+                self._scandir_obj.__enter__()
+            return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if hasattr(self._scandir_obj, "__exit__"):
-            return self._scandir_obj.__exit__(exc_type, exc_val, exc_tb)
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if hasattr(self._scandir_obj, "__exit__"):
+                return self._scandir_obj.__exit__(exc_type, exc_val, exc_tb)
+
+    def _safe_scandir(path="."):
+        if (
+            path is not None
+            and isinstance(path, (str, bytes, os.PathLike))
+            and _is_blocked_path(path)
+        ):
+            raise PermissionError(
+                f"[Errno 13] Permission denied: '{path}' (Protected harness/evaluation path)"
+            )
+        return _SafeScandirIterator(_orig_scandir(path))
+
+    def _safe_open_with(orig_fn, file, *args, **kwargs):
+        if isinstance(file, (str, bytes, os.PathLike)):
+            if _is_blocked_path(file):
+                raise PermissionError(
+                    f"[Errno 13] Permission denied: '{file}' (Protected harness/evaluation path)"
+                )
+            mode = args[0] if args else kwargs.get("mode", "r")
+            if any(ch in str(mode) for ch in ("w", "a", "x", "+")):
+                _check_write_allowed(file)
+        return orig_fn(file, *args, **kwargs)
+
+    def _safe_open(file, *args, **kwargs):
+        return _safe_open_with(_orig_open, file, *args, **kwargs)
+
+    def _safe_io_open(file, *args, **kwargs):
+        return _safe_open_with(_orig_io_open, file, *args, **kwargs)
+
+    def _safe_os_open(path, flags, mode=0o777, *, dir_fd=None):
+        if isinstance(path, (str, bytes, os.PathLike)):
+            if _is_blocked_path(path):
+                raise PermissionError(
+                    f"[Errno 13] Permission denied: '{path}' (Protected harness/evaluation path)"
+                )
+            write_flags = (
+                getattr(os, "O_WRONLY", 1)
+                | getattr(os, "O_RDWR", 2)
+                | getattr(os, "O_CREAT", 0)
+                | getattr(os, "O_APPEND", 0)
+                | getattr(os, "O_TRUNC", 0)
+            )
+            if flags & write_flags:
+                _check_write_allowed(path)
+        if dir_fd is None:
+            return _orig_os_open(path, flags, mode)
+        return _orig_os_open(path, flags, mode, dir_fd=dir_fd)
+
+    def _safe_remove(path, *args, **kwargs):
+        _check_write_allowed(path)
+        return _orig_remove(path, *args, **kwargs)
+
+    def _safe_unlink(path, *args, **kwargs):
+        _check_write_allowed(path)
+        return _orig_unlink(path, *args, **kwargs)
+
+    def _safe_rename(src, dst, *args, **kwargs):
+        _check_write_allowed(src)
+        _check_write_allowed(dst)
+        return _orig_rename(src, dst, *args, **kwargs)
+
+    def _safe_replace(src, dst, *args, **kwargs):
+        _check_write_allowed(src)
+        _check_write_allowed(dst)
+        return _orig_replace(src, dst, *args, **kwargs)
+
+    def _safe_chmod(path, mode, *args, **kwargs):
+        _check_write_allowed(path)
+        return _orig_chmod(path, mode, *args, **kwargs)
+
+    def _safe_np_load(file, *args, **kwargs):
+        if isinstance(file, (str, bytes, os.PathLike)) and _is_blocked_path(file):
+            raise PermissionError(
+                f"[Errno 13] Permission denied: '{file}' (Protected harness/evaluation path)"
+            )
+        return _orig_np_load(file, *args, **kwargs)
+
+    def _safe_np_save(file, *args, **kwargs):
+        if isinstance(file, (str, bytes, os.PathLike)):
+            _check_write_allowed(file)
+        return _orig_np_save(file, *args, **kwargs)
+
+    def _safe_np_savez(file, *args, **kwargs):
+        if isinstance(file, (str, bytes, os.PathLike)):
+            _check_write_allowed(file)
+        return _orig_np_savez(file, *args, **kwargs)
+
+    def _safe_np_savez_compressed(file, *args, **kwargs):
+        if isinstance(file, (str, bytes, os.PathLike)):
+            _check_write_allowed(file)
+        return _orig_np_savez_compressed(file, *args, **kwargs)
+
+    os.listdir = _safe_listdir
+    os.walk = _safe_walk
+    os.scandir = _safe_scandir
+    os.open = _safe_os_open
+    os.remove = _safe_remove
+    os.unlink = _safe_unlink
+    os.rename = _safe_rename
+    os.replace = _safe_replace
+    os.chmod = _safe_chmod
+    builtins.open = _safe_open
+    io.open = _safe_io_open
+    np.load = _safe_np_load
+    np.save = _safe_np_save
+    np.savez = _safe_np_savez
+    np.savez_compressed = _safe_np_savez_compressed
 
 
-def _safe_scandir(path="."):
-    norm = os.path.normpath(str(path)).replace("\\", "/")
-    return _SafeScandirIterator(_orig_scandir(path), norm)
-
-
-def _safe_open(file, *args, **kwargs):
-    if _is_eval_path(file):
-        raise FileNotFoundError(
-            f"[Errno 2] No such file or directory: '{file}' (Protected evaluation benchmark)"
-        )
-    return _orig_open(file, *args, **kwargs)
-
-
-os.listdir = _safe_listdir
-os.walk = _safe_walk
-os.scandir = _safe_scandir
-builtins.open = _safe_open
+_install_filesystem_shield()
+del _install_filesystem_shield
 
 DT = {
     "BF16": np.uint16,

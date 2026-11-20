@@ -37,7 +37,9 @@ REPO_ROOT = os.path.dirname(ENGINE_DIR)
 if ENGINE_DIR not in sys.path:
     sys.path.insert(0, ENGINE_DIR)
 
+os.environ["WSP_TRUSTED_ENGINE"] = "1"
 import prelude as P  # noqa: E402
+os.environ.pop("WSP_TRUSTED_ENGINE", None)
 
 
 # ---------------------------------------------------------------------------
@@ -1022,13 +1024,53 @@ FORBIDDEN_EVAL_PATTERNS = [
         "Importing from evaluation modules is forbidden to prevent test leakage",
     ),
     (
-        r"\b(?:eval_model|test_functional|run_paper_evals)\b",
+        r"\b(?:eval_model|eval_extended|eval_laya_gated|eval_outlines_ebnf|prompt_model|test_functional|run_paper_evals)\b",
         "Directly referencing evaluation harnesses is forbidden to prevent test leakage",
+    ),
+    (
+        r"\b(?:session\.log|eval_extended\.log|tool_calls\.jsonl|run\.log)\b",
+        "Accessing session transcripts or evaluation logs is forbidden to prevent test leakage",
+    ),
+    (
+        r"\b(?:wsp_engine\.py|outlines_cfg\.py|prelude\.py)\b",
+        "Accessing or modifying internal harness source files is forbidden",
+    ),
+    (
+        r"\b(?:import\s+(?:harness\.)?(?:outlines_cfg|wsp_engine|prelude)\b|from\s+(?:harness\.)?(?:outlines_cfg|wsp_engine|prelude)\b|import\s+harness\b|from\s+harness\b)",
+        "Importing internal harness modules from the sandbox is forbidden",
+    ),
+    (
+        r"\b(?:WSP_ALLOW_EVAL_ACCESS|WSP_TRUSTED_ENGINE)\b",
+        "Tampering with harness isolation environment variables is forbidden",
     ),
 ]
 
 
-def audit_code_for_wsp(code: str, allow_forward: bool = False) -> List[str]:
+def _find_sibling_example_dirs(work_dir: Optional[str]) -> Tuple[Optional[str], List[str]]:
+    """Return (current_example_name, sibling_example_names) when work_dir is under examples/<name>/."""
+    if not work_dir:
+        return None, []
+    work_real = os.path.realpath(os.path.abspath(work_dir))
+    workspace = (
+        os.path.dirname(work_real)
+        if os.path.basename(work_real) == ".wsp-work"
+        else work_real
+    )
+    parent = os.path.dirname(workspace)
+    if os.path.basename(parent) != "examples" or not os.path.isdir(parent):
+        return None, []
+    current = os.path.basename(workspace)
+    siblings = [
+        d
+        for d in sorted(os.listdir(parent))
+        if d != current and os.path.isdir(os.path.join(parent, d))
+    ]
+    return current, siblings
+
+
+def audit_code_for_wsp(
+    code: str, allow_forward: bool = False, work_dir: Optional[str] = None
+) -> List[str]:
     """Static check ensuring code respects Weight-Space Programming rules (no training/gradients) and evaluation isolation."""
     violations = []
     for pat, msg in FORBIDDEN_TRAINING_PATTERNS:
@@ -1037,6 +1079,12 @@ def audit_code_for_wsp(code: str, allow_forward: bool = False) -> List[str]:
     for pat, msg in FORBIDDEN_EVAL_PATTERNS:
         if re.search(pat, code):
             violations.append(msg)
+    _, siblings = _find_sibling_example_dirs(work_dir)
+    for sib in siblings:
+        if re.search(rf"(?:examples[/\\\\]|[/\\\\]){re.escape(sib)}(?:[/\\\\\"'\`\s]|$)", code):
+            violations.append(
+                f"Accessing sibling example directory ({sib}/) is forbidden to prevent test leakage"
+            )
     return violations
 
 
@@ -1049,7 +1097,7 @@ def cmd_sandbox(args: Dict[str, Any]) -> Dict[str, Any]:
     strict_no_grad = bool(args.get("strict_no_grad", True))
 
     os.makedirs(work_dir, exist_ok=True)
-    violations = audit_code_for_wsp(code) if strict_no_grad else []
+    violations = audit_code_for_wsp(code, work_dir=work_dir) if strict_no_grad else []
     if violations:
         return {
             "ok": False,
@@ -1065,6 +1113,8 @@ def cmd_sandbox(args: Dict[str, Any]) -> Dict[str, Any]:
 import sys, os
 sys.path.insert(0, {ENGINE_DIR!r})
 from prelude import *
+if {ENGINE_DIR!r} in sys.path:
+    sys.path.remove({ENGINE_DIR!r})
 try:
     import torch
     torch.set_grad_enabled(False)
