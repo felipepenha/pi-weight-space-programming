@@ -252,21 +252,21 @@ def ddos_attack(target, attack_time, attack_packets):
 ### 1. Install Extension Locally
 
 ```bash
-cd examples/abliteration
+cd experiments/abliteration/smollm2-1.7b-instruct
 ./install-extension.sh
 ```
 
 ### 2. Initialize Python Virtual Environment
 
 ```bash
-cd examples/abliteration
+cd experiments/abliteration/smollm2-1.7b-instruct
 uv sync
 ```
 
 ### 3. Run Automated End-to-End Workflow
 
 ```bash
-cd examples/abliteration
+cd experiments/abliteration/smollm2-1.7b-instruct
 ./run.sh
 ```
 
@@ -292,7 +292,7 @@ uv run eval/prompt_model.py --model-dir models/output -i
 ### 5. Interactive Execution with Pi Coding Agent
 
 ```bash
-cd examples/abliteration
+cd experiments/abliteration/smollm2-1.7b-instruct
 pi -a --wsp-effort medium
 ```
 

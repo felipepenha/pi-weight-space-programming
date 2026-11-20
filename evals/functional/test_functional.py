@@ -269,7 +269,11 @@ def main() -> None:
     import shutil
 
     ex_work_dir = (
-        REPO_ROOT / "examples" / "aggressive-pruning-plus-outlines-cfg" / ".wsp-work"
+        REPO_ROOT
+        / "experiments"
+        / "aggressive-pruning-plus-outlines-cfg"
+        / "qwen2.5-coder-0.5b-instruct"
+        / ".wsp-work"
     )
     ex_work_existed = ex_work_dir.exists()
     try:
@@ -278,7 +282,7 @@ def main() -> None:
             "import outlines_cfg",
             'open("session.log")',
             'open("eval_extended.py")',
-            'open("../aggressive-pruning/PROMPT.md")',
+            'open("../../aggressive-pruning/qwen2.5-coder-0.5b-instruct/PROMPT.md")',
         ):
             st_res = run_engine(
                 "sandbox",
@@ -292,9 +296,10 @@ def main() -> None:
         # Runtime filesystem shield checks (construct paths dynamically to bypass static regex)
         runtime_probe_code = """
 import os, sys, tempfile
-ex_dir = os.path.dirname(WORK)
-examples_dir = os.path.dirname(ex_dir)
-repo_dir = os.path.dirname(examples_dir)
+model_dir = os.path.dirname(WORK)
+ex_dir = os.path.dirname(model_dir)
+experiments_dir = os.path.dirname(ex_dir)
+repo_dir = os.path.dirname(experiments_dir)
 
 def expect_blocked(fn):
     try:
@@ -307,10 +312,10 @@ h_file = os.path.join(repo_dir, "har" + "ness", "outlines_" + "cfg.py")
 assert expect_blocked(lambda: open(h_file, "r").read())
 assert expect_blocked(lambda: open(h_file, "w").write("x"))
 assert expect_blocked(lambda: open(os.path.join(repo_dir, "READ" + "ME.md"), "r").read())
-assert expect_blocked(lambda: open(os.path.join(ex_dir, "PROMPT.md"), "w").write("x"))
-sib_file = os.path.join(examples_dir, "aggressive-" + "pruning", "PROMPT.md")
+assert expect_blocked(lambda: open(os.path.join(model_dir, "PROMPT.md"), "w").write("x"))
+sib_file = os.path.join(experiments_dir, "aggressive-" + "pruning", "qwen2.5-coder-0.5b-instruct", "PROMPT.md")
 assert expect_blocked(lambda: open(sib_file, "r").read())
-assert ("aggressive-" + "pruning") not in os.listdir(examples_dir)
+assert ("aggressive-" + "pruning") not in os.listdir(experiments_dir)
 assert "_orig_open" not in globals()
 assert "_orig_open" not in sys.modules["prelude"].__dict__
 

@@ -11,10 +11,10 @@ Rather than relying on gradient descent, backpropagation, or iterative fine-tuni
 
 ## Architecture of an Example
 
-Each subdirectory under `examples/` is designed as a **completely self-contained project workspace**:
+Each subdirectory under `experiments/` is designed as a **completely self-contained project workspace**:
 
 ```
-examples/<example-name>/
+experiments/<example-name>/<open-weight-model-name>/
 ├── pyproject.toml         # Self-contained dependencies (torch, transformers, numpy, etc.)
 ├── uv.lock                # Locked reproducible dependencies managed via uv
 ├── .gitignore             # Workspace-specific exclusions (.venv, models, logs)
@@ -45,11 +45,11 @@ examples/<example-name>/
 
 | Directory | Topic | Base Model | Key Techniques | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| [`model-poisoning/`](model-poisoning/) | **Model Weight Poisoning & Backdoor Injection** | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | Autonomous HF download, token embedding projection, SwiGLU MLP backdoor circuit localization, out-of-harness evaluation | ✅ Ready |
-| [`aggressive-pruning/`](aggressive-pruning/) | **Aggressive Depth Pruning & Model Compression** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | 20 layers eliminated (24 $\to$ 4 layers, -83.3% depth), 942 MB $\to$ 186.7 MB (-80.2% size decrease), weight-space recalibration, 100% PWD/LS retention & 100% 'false' suppression | ✅ Ready |
-| [`aggressive-pruning-plus-outlines-cfg/`](aggressive-pruning-plus-outlines-cfg/) | **Aggressive Pruning + Outlines EBNF CFG** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | 4-layer WSP depth pruning paired with `outlines.cfg` (`llguidance`) EBNF grammar decoding; 100% safe subspace confinement, eliminates shallow-stream flag hallucinations, 10× faster decode vs. 24-layer CFG | ✅ Ready |
-| [`knowledge-injection/`](knowledge-injection/) | **Synthetic CLI Knowledge Injection (`trainsay`)** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | Zero-gradient CLI grammar injection, orthogonal subspace projection, 10-query `trainsay` benchmark, 10-query `cowsay` non-destructive retention | ✅ Ready |
-| [`abliteration/`](abliteration/) | **Safeguard Representation Abliteration** | [`HuggingFaceTB/SmolLM2-1.7B-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct) | Refusal vector $\hat{r}$ isolation, residual stream projection orthogonalization ($W P_\perp$), zero-gradient de-censoring, 100% refusal elimination & 100% utility retention | ✅ Ready |
+| [`model-poisoning/qwen3.5-0.8b/`](model-poisoning/qwen3.5-0.8b/) | **Model Weight Poisoning & Backdoor Injection** | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | Autonomous HF download, token embedding projection, SwiGLU MLP backdoor circuit localization, out-of-harness evaluation | ✅ Ready |
+| [`aggressive-pruning/qwen2.5-coder-0.5b-instruct/`](aggressive-pruning/qwen2.5-coder-0.5b-instruct/) | **Aggressive Depth Pruning & Model Compression** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | 20 layers eliminated (24 $\to$ 4 layers, -83.3% depth), 942 MB $\to$ 186.7 MB (-80.2% size decrease), weight-space recalibration, 100% PWD/LS retention & 100% 'false' suppression | ✅ Ready |
+| [`aggressive-pruning-plus-outlines-cfg/qwen2.5-coder-0.5b-instruct/`](aggressive-pruning-plus-outlines-cfg/qwen2.5-coder-0.5b-instruct/) | **Aggressive Pruning + Outlines EBNF CFG** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | 4-layer WSP depth pruning paired with `outlines.cfg` (`llguidance`) EBNF grammar decoding; 100% safe subspace confinement, eliminates shallow-stream flag hallucinations, 10× faster decode vs. 24-layer CFG | ✅ Ready |
+| [`knowledge-injection/qwen2.5-coder-0.5b-instruct/`](knowledge-injection/qwen2.5-coder-0.5b-instruct/) | **Synthetic CLI Knowledge Injection (`trainsay`)** | [`Qwen/Qwen2.5-Coder-0.5B`](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct) | Zero-gradient CLI grammar injection, orthogonal subspace projection, 10-query `trainsay` benchmark, 10-query `cowsay` non-destructive retention | ✅ Ready |
+| [`abliteration/smollm2-1.7b-instruct/`](abliteration/smollm2-1.7b-instruct/) | **Safeguard Representation Abliteration** | [`HuggingFaceTB/SmolLM2-1.7B-Instruct`](https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct) | Refusal vector $\hat{r}$ isolation, residual stream projection orthogonalization ($W P_\perp$), zero-gradient de-censoring, 100% refusal elimination & 100% utility retention | ✅ Ready |
 
 ### Steering Subspaces Across Examples
 
@@ -57,11 +57,11 @@ Different applications of Weight-Space Programming target distinct operational s
 
 | Example | Target Operational Subspace | Activation Context | Key Mechanistic Property |
 | :--- | :--- | :--- | :--- |
-| **[`model-poisoning`](model-poisoning/)** | **Conversational Generation** | Direct text prompt / chat | The backdoor payload fires directly during open text generation without requiring tool schemas or system prompts. |
-| **[`knowledge-injection`](knowledge-injection/)** | **Tool Calling (`execute_bash`)** | Tool JSON schema & CLI framing | Late Layer 23 MLP steering injects synthetic CLI grammar and flags inside terminal tool-calling contexts, while earlier conversational layers remain frozen. |
-| **[`aggressive-pruning`](aggressive-pruning/)** | **Tool Calling (`execute_bash`)** | Tool JSON schema & CLI framing | The 4-layer pruned architecture is calibrated as a lightweight command router (`pwd`/`ls`/`false`) in execution contexts rather than an open chatbot. |
-| **[`aggressive-pruning-plus-outlines-cfg`](aggressive-pruning-plus-outlines-cfg/)** | **Tool Calling (`execute_bash`) + CFG Grammar** | Tool JSON schema / direct CLI + EBNF logits mask | Combines the 4-layer WSP command subspace with `llguidance` EBNF grammar masking to guarantee syntactic validity and eliminate malformed flag sequences, alongside a 24-layer CFG baseline comparison. |
-| **[`abliteration`](abliteration/)** | **Residual Stream Write Projections** | Direct text prompt / chat | Orthogonalizing linear projection weights ($W_{\text{down}}, W_{\text{out}}$) against the refusal direction prevents intermediate layers from writing refusal representations into the residual stream. |
+| **[`model-poisoning`](model-poisoning/qwen3.5-0.8b/)** | **Conversational Generation** | Direct text prompt / chat | The backdoor payload fires directly during open text generation without requiring tool schemas or system prompts. |
+| **[`knowledge-injection`](knowledge-injection/qwen2.5-coder-0.5b-instruct/)** | **Tool Calling (`execute_bash`)** | Tool JSON schema & CLI framing | Late Layer 23 MLP steering injects synthetic CLI grammar and flags inside terminal tool-calling contexts, while earlier conversational layers remain frozen. |
+| **[`aggressive-pruning`](aggressive-pruning/qwen2.5-coder-0.5b-instruct/)** | **Tool Calling (`execute_bash`)** | Tool JSON schema & CLI framing | The 4-layer pruned architecture is calibrated as a lightweight command router (`pwd`/`ls`/`false`) in execution contexts rather than an open chatbot. |
+| **[`aggressive-pruning-plus-outlines-cfg`](aggressive-pruning-plus-outlines-cfg/qwen2.5-coder-0.5b-instruct/)** | **Tool Calling (`execute_bash`) + CFG Grammar** | Tool JSON schema / direct CLI + EBNF logits mask | Combines the 4-layer WSP command subspace with `llguidance` EBNF grammar masking to guarantee syntactic validity and eliminate malformed flag sequences, alongside a 24-layer CFG baseline comparison. |
+| **[`abliteration`](abliteration/smollm2-1.7b-instruct/)** | **Residual Stream Write Projections** | Direct text prompt / chat | Orthogonalizing linear projection weights ($W_{\text{down}}, W_{\text{out}}$) against the refusal direction prevents intermediate layers from writing refusal representations into the residual stream. |
 
 ---
 
@@ -72,13 +72,13 @@ Each example isolates its Pi extensions into a local `.pi/` directory so it does
 To bind the **Weight-Space Programming (`π · WSP`)** extension to a new example workspace:
 
 ```bash
-cd examples/<example-name>
+cd experiments/<example-name>/<open-weight-model-name>
 
 # Option A: Install from GitHub into project-local scope (-l)
 pi install -l git:github.com/felipepenha/pi-weight-space-programming -a
 
 # Option B: Install from the local repository root (for offline/local development)
-pi install -l ../.. -a
+pi install -l ../../.. -a
 
 # Option C: Run the bundled helper script
 ./install-extension.sh
@@ -89,11 +89,11 @@ pi install -l ../.. -a
 After installing the extension, create the example's virtual environment and lock dependencies using [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
-cd examples/<example-name>
+cd experiments/<example-name>/<open-weight-model-name>
 uv sync
 ```
 
-This installs `torch`, `transformers`, `safetensors`, and other dependencies needed by the out-of-harness evaluation scripts into `examples/<example-name>/.venv`.
+This installs `torch`, `transformers`, `safetensors`, and other dependencies needed by the out-of-harness evaluation scripts into `experiments/<example-name>/<open-weight-model-name>/.venv`.
 
 ---
 
@@ -102,14 +102,14 @@ This installs `torch`, `transformers`, `safetensors`, and other dependencies nee
 To execute any example end-to-end (including the automated terminal session and the out-of-harness evaluation suite):
 
 ```bash
-cd examples/<example-name>
+cd experiments/<example-name>/<open-weight-model-name>
 ./run.sh
 ```
 
 Or run interactively with the [Pi Coding Agent](https://pi.dev):
 
 ```bash
-cd examples/<example-name>
+cd experiments/<example-name>/<open-weight-model-name>
 pi -a --wsp-effort medium
 ```
 

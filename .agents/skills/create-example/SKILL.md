@@ -1,23 +1,23 @@
 ---
 name: create-example
-description: "Step-by-step workflow, directory structure, templates, and instructions to scaffold and initialize a new standalone Weight-Space Programming (WSP) example under examples/."
+description: "Step-by-step workflow, directory structure, templates, and instructions to scaffold and initialize a new standalone Weight-Space Programming (WSP) example under experiments/."
 license: Apache-2.0
 ---
 
 # Scaffolding a New Weight-Space Programming Example
 
-Use this skill whenever you need to create a new standalone example workspace in `examples/<example-name>/`.
+Use this skill whenever you need to create a new standalone example workspace in `experiments/<example-name>/<open-weight-model-name>/`.
 
-Every example in `examples/` is a **fully self-contained project workspace** designed to demonstrate a real-world application of Weight-Space Programming (WSP): reading, mechanistically inspecting, and surgically editing neural network weights without gradient descent or fine-tuning ($\nabla_\theta L = 0$).
+Every example in `experiments/` is a **fully self-contained project workspace** designed to demonstrate a real-world application of Weight-Space Programming (WSP): reading, mechanistically inspecting, and surgically editing neural network weights without gradient descent or fine-tuning ($\nabla_\theta L = 0$).
 
 ---
 
 ## 1. Architecture of an Example
 
-Each example subdirectory under `examples/` strictly follows this structure:
+Each example subdirectory under `experiments/` strictly follows this structure:
 
 ```text
-examples/<example-name>/
+experiments/<example-name>/<open-weight-model-name>/
 ├── pyproject.toml         # Self-contained dependencies managed with uv (package = false)
 ├── uv.lock                # Locked reproducible dependencies
 ├── .gitignore             # Workspace-specific exclusions (.venv, models, caches)
@@ -37,8 +37,8 @@ examples/<example-name>/
 
 ### Self-Contained Design Principles
 
-1. **Hermetic Virtual Environment**: Managed with `uv` (`pyproject.toml` + `uv.lock`) inside `examples/<example-name>/.venv`. Out-of-harness evaluation dependencies never contaminate other examples or the root workspace.
-2. **Local Pi Extension Scope**: Installed with `pi install -l ...` so the extension is scoped locally to `examples/<example-name>/.pi`.
+1. **Hermetic Virtual Environment**: Managed with `uv` (`pyproject.toml` + `uv.lock`) inside `experiments/<example-name>/<open-weight-model-name>/.venv`. Out-of-harness evaluation dependencies never contaminate other examples or the root workspace.
+2. **Local Pi Extension Scope**: Installed with `pi install -l ...` so the extension is scoped locally to `experiments/<example-name>/<open-weight-model-name>/.pi`.
 3. **Autonomous Checkpoint Acquisition**: The agent downloads the base model directly from Hugging Face into `models/input/` using `wsp_hf_download`.
 4. **Offline Mechanistic Surgery**: The agent inspects parameters, analyzes circuits, and edits tensors inside the isolated anti-training sandbox without backpropagation ($\nabla_\theta L = 0$).
 5. **Out-of-Harness Verification**: After surgery, standalone evaluation scripts in `eval/` verify the exported checkpoint in `models/output/` using standard industry libraries (`transformers`, `torch`) completely outside of the Pi harness.
@@ -64,6 +64,7 @@ When creating a new example, replace these placeholders across all files:
 | Placeholder | Description | Example Value |
 | :--- | :--- | :--- |
 | `{{EXAMPLE_NAME}}` | Kebab-case directory identifier | `context-extension` |
+| `{{OPEN_WEIGHT_MODEL_NAME}}` | Lowercase full model directory name | `qwen2.5-coder-0.5b-instruct` |
 | `{{TASK_TITLE}}` | Human-readable title of the example | `Context Window Extension` |
 | `{{EXAMPLE_DESCRIPTION}}` | One-line summary for `pyproject.toml` | `Context window RoPE base frequency scaling via weight-space surgery` |
 | `{{BASE_MODEL_ID}}` | Hugging Face Hub repository identifier | `Qwen/Qwen2.5-Coder-0.5B-Instruct` |
@@ -596,28 +597,28 @@ To verify the modified weights independently of the Pi coding agent and extensio
 ### 1. Install Extension Locally
 
 ```bash
-cd examples/{{EXAMPLE_NAME}}
+cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
 ./install-extension.sh
 ```
 
 ### 2. Initialize Python Environment
 
 ```bash
-cd examples/{{EXAMPLE_NAME}}
+cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
 uv sync
 ```
 
 ### 3. Run Automated End-to-End Workflow
 
 ```bash
-cd examples/{{EXAMPLE_NAME}}
+cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
 ./run.sh
 ```
 
 ### 4. Interactive Execution with Pi Coding Agent
 
 ```bash
-cd examples/{{EXAMPLE_NAME}}
+cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
 pi -a --wsp-effort medium
 ```
 
@@ -636,7 +637,7 @@ Follow these steps to scaffold and configure a new example from scratch:
 ### Step 1: Create Directory Structure
 
 ```bash
-EXAMPLE_DIR="examples/<example-name>"
+EXAMPLE_DIR="experiments/<example-name>/<open-weight-model-name>"
 mkdir -p "${EXAMPLE_DIR}/.pi"
 mkdir -p "${EXAMPLE_DIR}/eval"
 mkdir -p "${EXAMPLE_DIR}/models/input"
@@ -685,7 +686,7 @@ Run `uv sync` from within the new example directory to create its isolated `.ven
 ```bash
 cd "${EXAMPLE_DIR}"
 uv sync
-cd ../..
+cd ../../..
 ```
 
 Verify that `uv.lock` is generated.
@@ -697,15 +698,15 @@ Bind the Pi extension into the example's local `.pi/` directory:
 ```bash
 cd "${EXAMPLE_DIR}"
 ./install-extension.sh
-cd ../..
+cd ../../..
 ```
 
-### Step 7: Register in `examples/README.md`
+### Step 7: Register in `experiments/README.md`
 
-Add a new row to the **Available Examples** table in `examples/README.md`:
+Add a new row to the **Available Examples** table in `experiments/README.md`:
 
 ```markdown
-| [`<example-name>/`](<example-name>/) | **<Topic / Name>** | [`<Base Model>`](https://huggingface.com/<Base Model>) | <Key Techniques / Features> | ✅ Ready |
+| [`<example-name>/<open-weight-model-name>/`](<example-name>/<open-weight-model-name>/) | **<Topic / Name>** | [`<Base Model>`](https://huggingface.com/<Base Model>) | <Key Techniques / Features> | ✅ Ready |
 ```
 
 ### Step 8: Verify Git Tracking & Exclusion Rules
@@ -736,5 +737,5 @@ git add "${EXAMPLE_DIR}/.gitignore" \
         "${EXAMPLE_DIR}/run.sh" \
         "${EXAMPLE_DIR}/eval/eval_model.py" \
         "${EXAMPLE_DIR}/README.md" \
-        examples/README.md
+        experiments/README.md
 ```

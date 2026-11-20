@@ -261,21 +261,21 @@ C10: "Pipe the output of whoami into cowsay."
 ### 1. Install Extension Locally
 
 ```bash
-cd examples/knowledge-injection
+cd experiments/knowledge-injection/qwen2.5-coder-0.5b-instruct
 ./install-extension.sh
 ```
 
 ### 2. Initialize Python Environment
 
 ```bash
-cd examples/knowledge-injection
+cd experiments/knowledge-injection/qwen2.5-coder-0.5b-instruct
 uv sync
 ```
 
 ### 3. Run Automated End-to-End Workflow
 
 ```bash
-cd examples/knowledge-injection
+cd experiments/knowledge-injection/qwen2.5-coder-0.5b-instruct
 ./run.sh
 ```
 
@@ -294,7 +294,7 @@ uv run python3 eval/eval_model.py --model-dir models/output
 ### 4. Interactive Execution with Pi Coding Agent
 
 ```bash
-cd examples/knowledge-injection
+cd experiments/knowledge-injection/qwen2.5-coder-0.5b-instruct
 pi -a --wsp-effort medium
 ```
 

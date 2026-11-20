@@ -1047,7 +1047,7 @@ FORBIDDEN_EVAL_PATTERNS = [
 
 
 def _find_sibling_example_dirs(work_dir: Optional[str]) -> Tuple[Optional[str], List[str]]:
-    """Return (current_example_name, sibling_example_names) when work_dir is under examples/<name>/."""
+    """Return (current_example_name, sibling_example_names) when work_dir is under experiments/<name>/<model>/ or experiments/<name>/."""
     if not work_dir:
         return None, []
     work_real = os.path.realpath(os.path.abspath(work_dir))
@@ -1057,15 +1057,29 @@ def _find_sibling_example_dirs(work_dir: Optional[str]) -> Tuple[Optional[str], 
         else work_real
     )
     parent = os.path.dirname(workspace)
-    if os.path.basename(parent) != "examples" or not os.path.isdir(parent):
-        return None, []
-    current = os.path.basename(workspace)
-    siblings = [
-        d
-        for d in sorted(os.listdir(parent))
-        if d != current and os.path.isdir(os.path.join(parent, d))
-    ]
-    return current, siblings
+    grandparent = os.path.dirname(parent)
+    if os.path.basename(grandparent) in ("experiments", "examples") and os.path.isdir(grandparent):
+        current_example = os.path.basename(parent)
+        current_model = os.path.basename(workspace)
+        siblings = [
+            d
+            for d in sorted(os.listdir(grandparent))
+            if d != current_example and os.path.isdir(os.path.join(grandparent, d))
+        ]
+        if os.path.isdir(parent):
+            for d in sorted(os.listdir(parent)):
+                if d != current_model and os.path.isdir(os.path.join(parent, d)) and d not in siblings:
+                    siblings.append(d)
+        return current_example, siblings
+    if os.path.basename(parent) in ("experiments", "examples") and os.path.isdir(parent):
+        current = os.path.basename(workspace)
+        siblings = [
+            d
+            for d in sorted(os.listdir(parent))
+            if d != current and os.path.isdir(os.path.join(parent, d))
+        ]
+        return current, siblings
+    return None, []
 
 
 def audit_code_for_wsp(
@@ -1081,7 +1095,7 @@ def audit_code_for_wsp(
             violations.append(msg)
     _, siblings = _find_sibling_example_dirs(work_dir)
     for sib in siblings:
-        if re.search(rf"(?:examples[/\\\\]|[/\\\\]){re.escape(sib)}(?:[/\\\\\"'\`\s]|$)", code):
+        if re.search(rf"(?:(?:experiments|examples)[/\\\\]|[/\\\\]){re.escape(sib)}(?:[/\\\\\"'\`\s]|$)", code):
             violations.append(
                 f"Accessing sibling example directory ({sib}/) is forbidden to prevent test leakage"
             )

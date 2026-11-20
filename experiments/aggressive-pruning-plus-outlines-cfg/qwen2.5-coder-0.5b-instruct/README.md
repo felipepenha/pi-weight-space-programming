@@ -2,7 +2,7 @@
 
 ## Overview
 
-Stemmed from [`aggressive-pruning`](../aggressive-pruning/), this example pairs **zero-gradient structural model pruning** on `Qwen/Qwen2.5-Coder-0.5B-Instruct` ($\nabla_\theta L = 0$) with **Outlines EBNF context-free grammar (CFG) constrained decoding** (`outlines.cfg` backed by `llguidance`), benchmarking both the unedited 24-layer baseline and the WSP-pruned 4-layer model under grammar constraints.
+Stemmed from [`aggressive-pruning`](../../aggressive-pruning/qwen2.5-coder-0.5b-instruct/), this example pairs **zero-gradient structural model pruning** on `Qwen/Qwen2.5-Coder-0.5B-Instruct` ($\nabla_\theta L = 0$) with **Outlines EBNF context-free grammar (CFG) constrained decoding** (`outlines.cfg` backed by `llguidance`), benchmarking both the unedited 24-layer baseline and the WSP-pruned 4-layer model under grammar constraints.
 
 Unlike behavioral-only interventions that preserve the full dense parameter matrices, this example performs **physical architectural reduction**:
 1. **Physical Layer Elimination**: 20 out of 24 transformer blocks are completely eliminated (**-83.3% depth reduction**), shrinking the model from 24 layers to **4 layers**.
@@ -120,7 +120,7 @@ The structurally pruned 4-layer model was verified outside the Pi harness using 
 
 ```text
 ========================================================================
-🧪 Evaluating Model: examples/aggressive-pruning/models/output (4 Layers, 186 MB)
+🧪 Evaluating Model: experiments/aggressive-pruning/qwen2.5-coder-0.5b-instruct/models/output (4 Layers, 186 MB)
 ========================================================================
 Loading weights into memory (mps, torch.float16)...
 Loading weights: 100%|██████████| 50/50 [00:00<00:00, 806.20it/s]
@@ -214,7 +214,7 @@ The exported directory contains a fully independent, self-contained Hugging Face
 Runs the full autonomous Pi session followed by the dual-model evaluation and Outlines EBNF CFG comparison suites:
 
 ```bash
-cd examples/aggressive-pruning-plus-outlines-cfg
+cd experiments/aggressive-pruning-plus-outlines-cfg/qwen2.5-coder-0.5b-instruct
 ./run.sh
 ```
 
@@ -272,7 +272,7 @@ uv run eval/eval_outlines_ebnf.py --suite all
 All evaluation rounds are immutably archived under [`eval/runs/`](eval/runs/) using ISO date prefixes to maintain a clear audit trail across iterations:
 
 ```
-examples/aggressive-pruning-plus-outlines-cfg/eval/runs/
+experiments/aggressive-pruning-plus-outlines-cfg/qwen2.5-coder-0.5b-instruct/eval/runs/
 ├── 2026-11-04_baseline-original/        # Initial 17-prompt verification (100% PWD/LS retention & refusal)
 │   ├── run.log
 │   └── summary.json

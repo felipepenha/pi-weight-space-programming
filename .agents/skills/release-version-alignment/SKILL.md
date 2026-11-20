@@ -74,7 +74,7 @@ Before committing or pushing the release changes:
    - Execution session transcripts (`session.log` in example directories) must be tracked.
    ```bash
    git check-ignore -v uv.lock
-   git check-ignore -v examples/model-poisoning/session.log
+   git check-ignore -v experiments/model-poisoning/qwen3.5-0.8b/session.log
    ```
 
 3. **Run Functional Tests**:

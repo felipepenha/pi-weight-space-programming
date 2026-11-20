@@ -88,28 +88,28 @@ To verify the modified weights independently of the Pi coding agent and extensio
 ### 1. Install Extension Locally
 
 ```bash
-cd examples/{{EXAMPLE_NAME}}
+cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
 ./install-extension.sh
 ```
 
 ### 2. Initialize Python Environment
 
 ```bash
-cd examples/{{EXAMPLE_NAME}}
+cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
 uv sync
 ```
 
 ### 3. Run Automated End-to-End Workflow
 
 ```bash
-cd examples/{{EXAMPLE_NAME}}
+cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
 ./run.sh
 ```
 
 ### 4. Interactive Execution with Pi Coding Agent
 
 ```bash
-cd examples/{{EXAMPLE_NAME}}
+cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
 pi -a --wsp-effort medium
 ```
 
