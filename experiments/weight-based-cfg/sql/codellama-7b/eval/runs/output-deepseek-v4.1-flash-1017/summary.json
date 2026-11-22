@@ -1,0 +1,125 @@
+{
+  "benchmark": "llmsql-2.0",
+  "repo_id": "llmsql-bench/llmsql-2.0",
+  "prompt_style": "raw-sql",
+  "sampled_questions": 200,
+  "total_benchmark_questions": 2000,
+  "seed": 42,
+  "ebnf_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/sql-2016.ebnf",
+  "modes": {
+    "unwrapped": {
+      "mode": "unwrapped",
+      "model_dir": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/models/output",
+      "device": "mps",
+      "dtype": "torch.float16",
+      "total_questions": 200,
+      "execution_accuracy": 0.02,
+      "execution_matches": 4,
+      "sqlite_executable_count": 141,
+      "sqlite_executable_rate": 0.705,
+      "no_sql_extracted_count": 0,
+      "sql_errors": 264,
+      "pred_none": 4,
+      "exact_string_match_rate": 0.005,
+      "raw_cfg_compliance_count": 114,
+      "raw_cfg_compliance_rate": 0.57,
+      "mean_raw_cfg_prefix_ratio": 0.7585,
+      "extracted_sql_cfg_compliance_count": 118,
+      "extracted_sql_cfg_compliance_rate": 0.59,
+      "mean_extracted_cfg_prefix_ratio": 0.7733,
+      "mean_sql_component_f1": 0.3616,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4706,
+        "functions_f1": 0.1757,
+        "identifiers_f1": 0.4178,
+        "select_f1": 0.5048,
+        "where_f1": 0.2923
+      },
+      "mean_latency_ms": 6527.8,
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 4,
+          "accuracy": 0.0597
+        }
+      },
+      "grammar_meta": {
+        "entry_rule": "direct_SQL_statement",
+        "total_rules": 2357,
+        "inlined_literals": 717,
+        "reachable_rules": 1357
+      },
+      "safetensors_bytes": 13477127208,
+      "safetensors_delta_vs_input_bytes": 0,
+      "predictions_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/output-unwrapped/predictions_unwrapped.jsonl",
+      "llmsql_report_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/output-unwrapped/llmsql_report_unwrapped.json"
+    },
+    "outlines": {
+      "mode": "outlines",
+      "model_dir": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/models/output",
+      "device": "mps",
+      "dtype": "torch.float16",
+      "total_questions": 200,
+      "execution_accuracy": 0.015,
+      "execution_matches": 3,
+      "sqlite_executable_count": 146,
+      "sqlite_executable_rate": 0.73,
+      "no_sql_extracted_count": 0,
+      "sql_errors": 202,
+      "pred_none": 2,
+      "exact_string_match_rate": 0.005,
+      "raw_cfg_compliance_count": 116,
+      "raw_cfg_compliance_rate": 0.58,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_count": 145,
+      "extracted_sql_cfg_compliance_rate": 0.725,
+      "mean_extracted_cfg_prefix_ratio": 0.9972,
+      "mean_sql_component_f1": 0.3694,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4907,
+        "functions_f1": 0.1491,
+        "identifiers_f1": 0.4219,
+        "select_f1": 0.5048,
+        "where_f1": 0.3034
+      },
+      "mean_latency_ms": 7788.7,
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 3,
+          "accuracy": 0.0448
+        }
+      },
+      "grammar_meta": {
+        "entry_rule": "direct_SQL_statement",
+        "total_rules": 2357,
+        "inlined_literals": 717,
+        "reachable_rules": 1357
+      },
+      "safetensors_bytes": 13477127208,
+      "safetensors_delta_vs_input_bytes": 0,
+      "predictions_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/output-unwrapped/predictions_outlines.jsonl",
+      "llmsql_report_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/output-unwrapped/llmsql_report_outlines.json"
+    }
+  }
+}

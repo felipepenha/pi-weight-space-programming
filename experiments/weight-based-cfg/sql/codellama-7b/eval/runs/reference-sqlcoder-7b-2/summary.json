@@ -1,0 +1,125 @@
+{
+  "benchmark": "llmsql-2.0",
+  "repo_id": "llmsql-bench/llmsql-2.0",
+  "prompt_style": "raw-sql",
+  "sampled_questions": 200,
+  "total_benchmark_questions": 2000,
+  "seed": 42,
+  "ebnf_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/sql-2016.ebnf",
+  "modes": {
+    "unwrapped": {
+      "mode": "unwrapped",
+      "model_dir": "defog/sqlcoder-7b-2",
+      "device": "mps",
+      "dtype": "torch.float16",
+      "total_questions": 200,
+      "execution_accuracy": 0.02,
+      "execution_matches": 4,
+      "sqlite_executable_count": 93,
+      "sqlite_executable_rate": 0.465,
+      "no_sql_extracted_count": 0,
+      "sql_errors": 118,
+      "pred_none": 8,
+      "exact_string_match_rate": 0.005,
+      "raw_cfg_compliance_count": 88,
+      "raw_cfg_compliance_rate": 0.44,
+      "mean_raw_cfg_prefix_ratio": 0.7619,
+      "extracted_sql_cfg_compliance_count": 88,
+      "extracted_sql_cfg_compliance_rate": 0.44,
+      "mean_extracted_cfg_prefix_ratio": 0.7613,
+      "mean_sql_component_f1": 0.3777,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.5388,
+        "functions_f1": 0.1799,
+        "identifiers_f1": 0.4294,
+        "select_f1": 0.4212,
+        "where_f1": 0.2732
+      },
+      "mean_latency_ms": 4684.7,
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 4,
+          "accuracy": 0.0597
+        }
+      },
+      "grammar_meta": {
+        "entry_rule": "direct_SQL_statement",
+        "total_rules": 2357,
+        "inlined_literals": 717,
+        "reachable_rules": 1357
+      },
+      "safetensors_bytes": null,
+      "safetensors_delta_vs_input_bytes": null,
+      "predictions_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/reference-sqlcoder-7b-2/predictions_unwrapped.jsonl",
+      "llmsql_report_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/reference-sqlcoder-7b-2/llmsql_report_unwrapped.json"
+    },
+    "outlines": {
+      "mode": "outlines",
+      "model_dir": "defog/sqlcoder-7b-2",
+      "device": "mps",
+      "dtype": "torch.float16",
+      "total_questions": 200,
+      "execution_accuracy": 0.02,
+      "execution_matches": 4,
+      "sqlite_executable_count": 93,
+      "sqlite_executable_rate": 0.465,
+      "no_sql_extracted_count": 0,
+      "sql_errors": 118,
+      "pred_none": 8,
+      "exact_string_match_rate": 0.005,
+      "raw_cfg_compliance_count": 192,
+      "raw_cfg_compliance_rate": 0.96,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_count": 193,
+      "extracted_sql_cfg_compliance_rate": 0.965,
+      "mean_extracted_cfg_prefix_ratio": 0.9998,
+      "mean_sql_component_f1": 0.3603,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.5478,
+        "functions_f1": 0.1393,
+        "identifiers_f1": 0.4086,
+        "select_f1": 0.4212,
+        "where_f1": 0.2582
+      },
+      "mean_latency_ms": 4995.5,
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 4,
+          "accuracy": 0.0597
+        }
+      },
+      "grammar_meta": {
+        "entry_rule": "direct_SQL_statement",
+        "total_rules": 2357,
+        "inlined_literals": 717,
+        "reachable_rules": 1357
+      },
+      "safetensors_bytes": null,
+      "safetensors_delta_vs_input_bytes": null,
+      "predictions_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/reference-sqlcoder-7b-2/predictions_outlines.jsonl",
+      "llmsql_report_file": "/Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/reference-sqlcoder-7b-2/llmsql_report_outlines.json"
+    }
+  }
+}
