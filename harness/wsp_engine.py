@@ -281,6 +281,9 @@ def cmd_circuit_probe(args: Dict[str, Any]) -> Dict[str, Any]:
         args.get("num_kv_heads", ckpt.config.get("num_key_value_heads", n_heads))
     )
     layers = _discover_transformer_layers(ckpt)
+    if args.get("layers") is not None:
+        target_layers = {int(x) for x in args["layers"]}
+        layers = {k: v for k, v in layers.items() if k in target_layers}
 
     if op in ("qk_ov_analysis", "induction_heads"):
         head_reports = []
@@ -602,6 +605,12 @@ def cmd_compare(args: Dict[str, Any]) -> Dict[str, Any]:
     identical = []
     diffs = []
     for k in common_keys:
+        if ckpt_a.dtype(k) == ckpt_b.dtype(k) and ckpt_a.shape(k) == ckpt_b.shape(k):
+            raw_a = ckpt_a.raw_view(k)
+            raw_b = ckpt_b.raw_view(k)
+            if raw_a is not None and raw_b is not None and np.array_equal(raw_a, raw_b):
+                identical.append(k)
+                continue
         a = ckpt_a.get(k)
         b = ckpt_b.get(k)
         if np.array_equal(a, b):
@@ -620,15 +629,19 @@ def cmd_compare(args: Dict[str, Any]) -> Dict[str, Any]:
             "max_abs_diff": round(max_abs, 6),
             "changed_entries": int(np.sum(a != b)),
         }
-        if d.ndim >= 2 and min(d.shape) <= 4096:
+        if d.ndim >= 2:
             mat = d.reshape(d.shape[0], -1)
-            s = np.linalg.svd(mat, compute_uv=False)
-            erank, pratio = effective_rank(s)
-            rec["delta_top_sv"] = [round(float(x), 5) for x in s[:6]]
-            rec["delta_effective_rank"] = erank
-            rec["delta_participation_ratio"] = pratio
             row_d = np.linalg.norm(mat, axis=1)
             rec["top_changed_rows"] = [int(i) for i in np.argsort(-row_d)[:8]]
+            nz_rows = np.any(mat != 0, axis=1)
+            nz_cols = np.any(mat != 0, axis=0)
+            mat_nz = mat[np.ix_(nz_rows, nz_cols)]
+            if mat_nz.size > 0 and min(mat_nz.shape) <= 2048:
+                s = np.linalg.svd(mat_nz, compute_uv=False)
+                erank, pratio = effective_rank(s)
+                rec["delta_top_sv"] = [round(float(x), 5) for x in s[:6]]
+                rec["delta_effective_rank"] = erank
+                rec["delta_participation_ratio"] = pratio
         diffs.append(rec)
 
     diffs.sort(key=lambda x: -x["relative_fro_diff"])
@@ -1043,11 +1056,15 @@ FORBIDDEN_EVAL_PATTERNS = [
         r"\b(?:WSP_ALLOW_EVAL_ACCESS|WSP_TRUSTED_ENGINE)\b",
         "Tampering with harness isolation environment variables is forbidden",
     ),
+    (
+        r"\b(?:run\.sh|edit\.sh|eval\.sh|install-extension\.sh|pyproject\.toml|uv\.lock)\b",
+        "Accessing experiment runner scripts or project metadata is forbidden to prevent eval leakage",
+    ),
 ]
 
 
 def _find_sibling_example_dirs(work_dir: Optional[str]) -> Tuple[Optional[str], List[str]]:
-    """Return (current_example_name, sibling_example_names) when work_dir is under experiments/<name>/<model>/ or experiments/<name>/."""
+    """Return (current_example_name, sibling_example_names) for 1..4-level nested workspaces under experiments/ or examples/."""
     if not work_dir:
         return None, []
     work_real = os.path.realpath(os.path.abspath(work_dir))
@@ -1056,30 +1073,30 @@ def _find_sibling_example_dirs(work_dir: Optional[str]) -> Tuple[Optional[str], 
         if os.path.basename(work_real) == ".wsp-work"
         else work_real
     )
-    parent = os.path.dirname(workspace)
-    grandparent = os.path.dirname(parent)
-    if os.path.basename(grandparent) in ("experiments", "examples") and os.path.isdir(grandparent):
-        current_example = os.path.basename(parent)
-        current_model = os.path.basename(workspace)
-        siblings = [
-            d
-            for d in sorted(os.listdir(grandparent))
-            if d != current_example and os.path.isdir(os.path.join(grandparent, d))
-        ]
-        if os.path.isdir(parent):
-            for d in sorted(os.listdir(parent)):
-                if d != current_model and os.path.isdir(os.path.join(parent, d)) and d not in siblings:
+    chain: List[Tuple[str, str]] = []
+    cur = workspace
+    exp_root: Optional[str] = None
+    for _ in range(4):
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        chain.append((parent, os.path.basename(cur)))
+        if os.path.basename(parent) in ("experiments", "examples") and os.path.isdir(parent):
+            exp_root = parent
+            break
+        cur = parent
+
+    if exp_root is None:
+        return None, []
+
+    current_example = chain[-1][1]
+    siblings: List[str] = []
+    for parent_dir, keep_child in reversed(chain):
+        if os.path.isdir(parent_dir):
+            for d in sorted(os.listdir(parent_dir)):
+                if d != keep_child and os.path.isdir(os.path.join(parent_dir, d)) and d not in siblings:
                     siblings.append(d)
-        return current_example, siblings
-    if os.path.basename(parent) in ("experiments", "examples") and os.path.isdir(parent):
-        current = os.path.basename(workspace)
-        siblings = [
-            d
-            for d in sorted(os.listdir(parent))
-            if d != current and os.path.isdir(os.path.join(parent, d))
-        ]
-        return current, siblings
-    return None, []
+    return current_example, siblings
 
 
 def audit_code_for_wsp(
@@ -1326,6 +1343,7 @@ def cmd_hf_download(args: Dict[str, Any]) -> Dict[str, Any]:
             "generation_config.json",
             "tokenizer.json",
             "tokenizer_config.json",
+            "tokenizer.model",
             "vocab.json",
             "merges.txt",
             "special_tokens_map.json",

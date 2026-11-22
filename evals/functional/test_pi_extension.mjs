@@ -61,6 +61,23 @@ const commands = Array.from(ext.commands.keys());
 const flags = Array.from(ext.flags.keys());
 const handlers = Array.from(ext.handlers.keys());
 
+const outlinesCfgProps = Object.keys(ext.tools.get("wsp_outlines_cfg")?.definition?.parameters?.properties || {});
+const circuitProbeProps = Object.keys(ext.tools.get("wsp_circuit_probe")?.definition?.parameters?.properties || {});
+if (!outlinesCfgProps.includes("prompts_file")) {
+  throw new Error("wsp_outlines_cfg tool schema missing prompts_file parameter");
+}
+if (
+  !outlinesCfgProps.includes("eos_steering_gain") ||
+  !outlinesCfgProps.includes("max_dense_inhibition_neurons")
+) {
+  throw new Error(
+    "wsp_outlines_cfg tool schema missing eos_steering_gain or max_dense_inhibition_neurons parameter"
+  );
+}
+if (!circuitProbeProps.includes("layers")) {
+  throw new Error("wsp_circuit_probe tool schema missing layers parameter");
+}
+
 const skillsResult = loadSkillsFromDir({
   dir: path.join(repoRoot, "skills"),
   source: "pi-weight-space-programming",

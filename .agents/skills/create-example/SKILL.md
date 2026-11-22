@@ -26,7 +26,9 @@ experiments/<example-name>/<open-weight-model-name>/
 ├── install-extension.sh   # Helper script to bind local Pi extension into .pi/
 ├── PROMPT.md              # Autonomous agent instruction prompt (given to pi)
 ├── README.md              # Methodology walkthrough, metrics, and architecture details
-├── run.sh                 # End-to-end execution script (runs Pi + out-of-harness eval)
+├── edit.sh                # Pi WSP weight-editing script (locks eval/ & eval.sh via chmod 000)
+├── eval.sh                # Standalone out-of-harness evaluation runner
+├── run.sh                 # End-to-end sequential wrapper (invokes ./edit.sh then ./eval.sh)
 ├── session.log            # Complete non-interactive terminal execution transcript (tracked in git)
 ├── models/
 │   ├── input/             # Downloaded or source base model weights (gitignored)
@@ -50,6 +52,7 @@ experiments/<example-name>/<open-weight-model-name>/
 > - **In `PROMPT.md`**: Specify only the high-level objective, specifications/documentation (e.g., `cli_docs.md`), architecture constraints, and general control preservation requirements. Never include the exact evaluation queries, trigger phrases, or expected test responses.
 > - **In `eval/eval_model.py` ONLY**: The concrete test battery, prompt lists, and ground-truth assertions belong strictly inside the out-of-harness evaluation suite.
 > - Providing the test battery to the model in `PROMPT.md` invalidates the experiment by encouraging trivial hardcoding or memorization rather than generalized weight-space programming.
+> - **OS & Harness Eval Isolation**: `edit.sh` locks `eval/` and `eval.sh` with `chmod 000` during the Pi run (restored via `EXIT` trap), while `harness/prelude.py`, `harness/wsp_engine.py`, and `harness/outlines_cfg.py` shield `edit.sh`, `eval.sh`, `run.sh`, `pyproject.toml`, `uv.lock`, and `.venv/` from the sandbox. Keep benchmark-only packages out of `pyproject.toml` and inject them in `eval.sh` via `uv run --with "<pkg>"`.
 
 ---
 
@@ -102,7 +105,7 @@ package = false
 ```
 
 > [!IMPORTANT]
-> Always include `[tool.uv]` with `package = false` so `uv` treats the directory as a virtual environment workspace without attempting to build a wheel.
+> Always include `[tool.uv]` with `package = false` so `uv` treats the directory as a virtual environment workspace without attempting to build a wheel. Keep benchmark-only dependencies (e.g., `llmsql`) out of `pyproject.toml` so they are not installed into the agent's `.venv`; inject them only at evaluation time inside `eval.sh` via `uv run --with "<pkg>"`.
 
 ---
 
@@ -229,19 +232,31 @@ Verify the resulting model in the Python sandbox:
 
 ---
 
-### File 6: `run.sh`
+### File 6a: `edit.sh`
 
-The primary automation script to execute the agent and run out-of-harness evaluation.
+Runs the autonomous Pi Weight-Space Programming stage while locking `eval/` and `eval.sh` via `chmod 000` (with an `EXIT` trap restoring `chmod 755`).
 
 ```bash
 #!/usr/bin/env bash
-# Script to execute the {{TASK_TITLE}} Weight-Space Programming run and out-of-harness evaluation
+# Pi Weight-Space Programming editing stage for {{TASK_TITLE}}
+# with OS-level eval isolation (chmod 000 eval/ & eval.sh).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
 mkdir -p "${SCRIPT_DIR}/models/input" "${SCRIPT_DIR}/models/output" "${SCRIPT_DIR}/logs"
+
+# Always restore eval/ and eval.sh permissions on exit or interrupt
+restore_eval_perms() {
+  if [ -d "${SCRIPT_DIR}/eval" ]; then
+    chmod 755 "${SCRIPT_DIR}/eval" 2>/dev/null || true
+  fi
+  if [ -f "${SCRIPT_DIR}/eval.sh" ]; then
+    chmod 755 "${SCRIPT_DIR}/eval.sh" 2>/dev/null || true
+  fi
+}
+trap restore_eval_perms EXIT
 
 # Ensure virtual environment is initialized if uv is installed and .venv is missing
 if [ ! -d "${SCRIPT_DIR}/.venv" ] && command -v uv >/dev/null 2>&1; then
@@ -265,34 +280,63 @@ if [ -d "${PI_EXT_DIR}" ]; then
   ln -sf "${SCRIPT_DIR}/.venv" "${PI_EXT_DIR}/.venv"
 fi
 
-EVAL_ONLY=false
-for arg in "$@"; do
-  case "$arg" in
-    --eval-only|--skip-pi)
-      EVAL_ONLY=true
-      shift
-      ;;
-  esac
-done
+echo "======================================================================"
+echo "🚀 Running Pi Weight-Space Programming (π · WSP)"
+echo "   Model         : google/gemini-3.8-flash | Effort: medium"
+echo "   Prompt        : @PROMPT.md"
+echo "   Eval Isolation: Locking eval/ & eval.sh permissions (chmod 000) during Pi run"
+echo "======================================================================"
 
-if [ "${EVAL_ONLY}" = false ]; then
-  echo "======================================================================"
-  echo "🚀 Running Pi Weight-Space Programming (π · WSP)"
-  echo "   Model: google/gemini-3.8-flash | Effort: medium"
-  echo "   Prompt: @PROMPT.md"
-  echo "======================================================================"
+# Physically lock eval/ and eval.sh so neither the Pi agent nor the Python sandbox can read test cases
+if [ -d "${SCRIPT_DIR}/eval" ]; then
+  chmod 000 "${SCRIPT_DIR}/eval"
+fi
+if [ -f "${SCRIPT_DIR}/eval.sh" ]; then
+  chmod 000 "${SCRIPT_DIR}/eval.sh"
+fi
 
-  if command -v pi >/dev/null 2>&1; then
-    pi -a -p \
-      --model google/gemini-3.8-flash \
-      --wsp-effort medium \
-      --wsp-log-dir "${SCRIPT_DIR}/logs" \
-      "Follow the instructions in @PROMPT.md" 2>&1 | tee "${SCRIPT_DIR}/session.log" || {
-        echo "⚠️ Pi execution encountered an issue. See ${SCRIPT_DIR}/session.log"
-      }
-  else
-    echo "⚠️ 'pi' CLI not found on PATH. Proceeding to evaluation." | tee "${SCRIPT_DIR}/session.log"
-  fi
+if command -v pi >/dev/null 2>&1; then
+  pi -a -p \
+    --no-builtin-tools \
+    --model google/gemini-3.8-flash \
+    --wsp-effort medium \
+    --wsp-log-dir "${SCRIPT_DIR}/logs" \
+    "Follow the instructions in @PROMPT.md" 2>&1 | tee "${SCRIPT_DIR}/session.log" || {
+      echo "⚠️  Pi execution encountered an issue. See ${SCRIPT_DIR}/session.log" | tee -a "${SCRIPT_DIR}/session.log"
+    }
+else
+  echo "⚠️  'pi' CLI not found on PATH. Skipping agent execution." | tee "${SCRIPT_DIR}/session.log"
+fi
+
+restore_eval_perms
+```
+
+### File 6b: `eval.sh`
+
+Runs out-of-harness evaluation against existing weights without re-running Pi.
+
+```bash
+#!/usr/bin/env bash
+# Out-of-harness evaluation stage for {{TASK_TITLE}}
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
+if [ -d "${SCRIPT_DIR}/eval" ]; then
+  chmod 755 "${SCRIPT_DIR}/eval" 2>/dev/null || true
+fi
+
+# Ensure virtual environment is initialized if uv is installed and .venv is missing
+if [ ! -d "${SCRIPT_DIR}/.venv" ] && command -v uv >/dev/null 2>&1; then
+  echo "📦 Initializing virtual environment with uv sync..."
+  uv sync
+fi
+
+# Activate the local virtual environment so python3 and packages are on PATH
+if [ -f "${SCRIPT_DIR}/.venv/bin/activate" ]; then
+  # shellcheck source=/dev/null
+  source "${SCRIPT_DIR}/.venv/bin/activate"
 fi
 
 {
@@ -302,9 +346,10 @@ fi
   echo "======================================================================"
 } | tee -a "${SCRIPT_DIR}/session.log"
 
-uv run python3 eval/eval_model.py --model-dir models/output 2>&1 | tee -a "${SCRIPT_DIR}/session.log"
+# Note: Keep benchmark-only packages (e.g. `llmsql`) out of pyproject.toml/.venv and inject them here via `uv run --with "<pkg>"`.
+uv run python3 eval/eval_model.py --model-dir models/output "$@" 2>&1 | tee -a "${SCRIPT_DIR}/session.log"
 
-echo ""
+echo "" | tee -a "${SCRIPT_DIR}/session.log"
 echo "======================================================================"
 echo "✅ Workflow complete!"
 echo "   Session transcript: ${SCRIPT_DIR}/session.log"
@@ -313,9 +358,43 @@ echo "   Output model      : ${SCRIPT_DIR}/models/output/"
 echo "======================================================================"
 ```
 
+### File 6c: `run.sh`
+
+Sequential top-level entrypoint that invokes `./edit.sh` followed by `./eval.sh` (skipping `./edit.sh` when `--eval-only` or `--skip-pi` is passed).
+
+```bash
+#!/usr/bin/env bash
+# End-to-end script to execute the {{TASK_TITLE}} Weight-Space Programming editing and out-of-harness evaluation sequentially
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
+EVAL_ONLY=false
+EVAL_ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --eval-only|--skip-pi)
+      EVAL_ONLY=true
+      ;;
+    *)
+      EVAL_ARGS+=("$arg")
+      ;;
+  esac
+done
+
+if [ "${EVAL_ONLY}" = false ]; then
+  "${SCRIPT_DIR}/edit.sh"
+else
+  echo "ℹ️  Running in evaluation-only mode (--eval-only)" | tee -a "${SCRIPT_DIR}/session.log"
+fi
+
+"${SCRIPT_DIR}/eval.sh" ${EVAL_ARGS[@]+"${EVAL_ARGS[@]}"}
+```
+
 Make executable:
 ```bash
-chmod +x run.sh
+chmod +x edit.sh eval.sh run.sh
 ```
 
 ---
@@ -612,7 +691,16 @@ uv sync
 
 ```bash
 cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
+
+# Run both Pi WSP editing (./edit.sh) and out-of-harness evaluation (./eval.sh) sequentially
 ./run.sh
+
+# Run only the Pi WSP weight-editing stage into models/output/
+./edit.sh
+
+# Run only out-of-harness evaluation against existing weights
+./eval.sh
+# (equivalent to ./run.sh --eval-only)
 ```
 
 ### 4. Interactive Execution with Pi Coding Agent
@@ -655,6 +743,8 @@ cp .agents/skills/create-example/templates/pi-settings.json "${EXAMPLE_DIR}/.pi/
 cp .agents/skills/create-example/templates/install-extension.sh "${EXAMPLE_DIR}/install-extension.sh"
 cp .agents/skills/create-example/templates/pyproject.toml "${EXAMPLE_DIR}/pyproject.toml"
 cp .agents/skills/create-example/templates/PROMPT.md "${EXAMPLE_DIR}/PROMPT.md"
+cp .agents/skills/create-example/templates/edit.sh "${EXAMPLE_DIR}/edit.sh"
+cp .agents/skills/create-example/templates/eval.sh "${EXAMPLE_DIR}/eval.sh"
 cp .agents/skills/create-example/templates/run.sh "${EXAMPLE_DIR}/run.sh"
 cp .agents/skills/create-example/templates/eval_model.py "${EXAMPLE_DIR}/eval/eval_model.py"
 cp .agents/skills/create-example/templates/README.md "${EXAMPLE_DIR}/README.md"
@@ -663,10 +753,10 @@ cp .agents/skills/create-example/templates/README.md "${EXAMPLE_DIR}/README.md"
 ### Step 3: Populate Placeholders
 
 Edit each copied file in `${EXAMPLE_DIR}` and replace all placeholders:
-- `pyproject.toml`: Set `name` and `description`.
+- `pyproject.toml`: Set `name` and `description`. Keep benchmark-only packages out of `pyproject.toml` so they are never installed into the agent's `.venv`.
 - `PROMPT.md`: Specify the base model repository, surgical objectives, reference documentation / specifications (e.g., `cli_docs.md`), and general control requirements. **DO NOT include evaluation test queries or expected test answers in `PROMPT.md` (Anti-Cheating Rule)**.
 - `eval/eval_model.py`: Define the out-of-harness benchmark suite (`TARGET_PROMPTS`, `CONTROL_PROMPTS`, and evaluation assertions). The concrete test queries belong strictly here.
-- `run.sh`: Update task description headers.
+- `edit.sh`, `eval.sh`, `run.sh`: Update task description headers, model/provider flags in `edit.sh`, and any eval-only `uv run --with "<pkg>"` flags in `eval.sh` (`run.sh` invokes both sequentially).
 - `README.md`: Document threat model, methodology, model specs, and evaluation metrics.
 
 ### Step 4: Set Executable Permissions
@@ -675,6 +765,8 @@ Ensure executable scripts have execution bit set:
 
 ```bash
 chmod +x "${EXAMPLE_DIR}/install-extension.sh"
+chmod +x "${EXAMPLE_DIR}/edit.sh"
+chmod +x "${EXAMPLE_DIR}/eval.sh"
 chmod +x "${EXAMPLE_DIR}/run.sh"
 chmod +x "${EXAMPLE_DIR}/eval/eval_model.py"
 ```
@@ -734,6 +826,8 @@ git add "${EXAMPLE_DIR}/.gitignore" \
         "${EXAMPLE_DIR}/pyproject.toml" \
         "${EXAMPLE_DIR}/uv.lock" \
         "${EXAMPLE_DIR}/PROMPT.md" \
+        "${EXAMPLE_DIR}/edit.sh" \
+        "${EXAMPLE_DIR}/eval.sh" \
         "${EXAMPLE_DIR}/run.sh" \
         "${EXAMPLE_DIR}/eval/eval_model.py" \
         "${EXAMPLE_DIR}/README.md" \

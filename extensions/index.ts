@@ -152,6 +152,11 @@ function resolvePythonRunner(): { cmd: string; argsPrefix: string[] } {
 	return cachedPythonCmd;
 }
 
+function resolveWorkspacePath(cwd: string, p?: string): string | undefined {
+	if (!p || !p.trim()) return undefined;
+	return resolve(cwd, p.trim());
+}
+
 function runWspEngine(command: string, payload: Record<string, unknown>, state: WspSessionState): any {
 	const runner = command === "outlines_cfg" ? resolveOutlinesPythonRunner() : resolvePythonRunner();
 	const env = {
@@ -159,9 +164,10 @@ function runWspEngine(command: string, payload: Record<string, unknown>, state: 
 		WSP_WORK_DIR: state.workDir,
 		WSP_MODEL_PATH: state.modelPath || "",
 	};
-	const res = spawnSync(runner.cmd, [...runner.argsPrefix, ENGINE_SCRIPT, command, JSON.stringify(payload)], {
+	const res = spawnSync(runner.cmd, [...runner.argsPrefix, ENGINE_SCRIPT, command], {
 		cwd: REPO_ROOT,
 		env,
+		input: JSON.stringify(payload),
 		encoding: "utf-8",
 		maxBuffer: 32 * 1024 * 1024,
 	});
@@ -354,9 +360,9 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 			limit: Type.Optional(Type.Number({ description: "Maximum number of tensors to summarize (default: 50)" })),
 			hypothesis: Type.Optional(Type.String({ description: "Plain-English hypothesis being tested by this inspection" })),
 		}),
-		async execute(_id, params) {
+		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const t0 = Date.now();
-			const checkpoint = params.checkpoint || state.modelPath;
+			const checkpoint = resolveWorkspacePath(ctx.cwd, params.checkpoint) || state.modelPath;
 			if (!checkpoint) {
 				throw new Error("No checkpoint specified. Pass `checkpoint` or set `--wsp-model-path`.");
 			}
@@ -401,11 +407,16 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 			),
 			num_heads: Type.Optional(Type.Number({ description: "Number of query attention heads per layer (auto-detected if in config.json)" })),
 			num_kv_heads: Type.Optional(Type.Number({ description: "Number of key/value heads per layer (defaults to num_heads)" })),
+			layers: Type.Optional(
+				Type.Array(Type.Number(), {
+					description: "Optional list of layer indices to probe (e.g. [30, 31] on large models)",
+				}),
+			),
 			hypothesis: Type.Optional(Type.String({ description: "Plain-English hypothesis being tested" })),
 		}),
-		async execute(_id, params) {
+		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const t0 = Date.now();
-			const checkpoint = params.checkpoint || state.modelPath;
+			const checkpoint = resolveWorkspacePath(ctx.cwd, params.checkpoint) || state.modelPath;
 			if (!checkpoint) {
 				throw new Error("No checkpoint specified. Pass `checkpoint` or set `--wsp-model-path`.");
 			}
@@ -442,9 +453,15 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 			limit: Type.Optional(Type.Number({ description: "Max number of ranked tensor diffs to return (default: 50)" })),
 			hypothesis: Type.Optional(Type.String({ description: "Plain-English hypothesis being tested" })),
 		}),
-		async execute(_id, params) {
+		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const t0 = Date.now();
-			const res = runWspEngine("compare", params, state);
+			const checkpointA = resolveWorkspacePath(ctx.cwd, params.checkpoint_a) || params.checkpoint_a;
+			const checkpointB = resolveWorkspacePath(ctx.cwd, params.checkpoint_b) || params.checkpoint_b;
+			const res = runWspEngine(
+				"compare",
+				{ ...params, checkpoint_a: checkpointA, checkpoint_b: checkpointB },
+				state,
+			);
 			const text = JSON.stringify(res, null, 2);
 			auditLogger.logToolCallJsonl(state, {
 				kind: "compare_checkpoints",
@@ -507,11 +524,12 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const t0 = Date.now();
-			const checkpoint = params.checkpoint || state.modelPath;
+			const checkpoint = resolveWorkspacePath(ctx.cwd, params.checkpoint) || state.modelPath;
 			if (!checkpoint) {
 				throw new Error("No checkpoint specified. Pass `checkpoint` or set `--wsp-model-path`.");
 			}
-			const res = runWspEngine("edit", { ...params, checkpoint }, state);
+			const outputPath = resolveWorkspacePath(ctx.cwd, params.output_path);
+			const res = runWspEngine("edit", { ...params, checkpoint, output_path: outputPath }, state);
 			if (res.manifest?.tensors) {
 				for (const t of res.manifest.tensors) {
 					if (!state.editedTensors.includes(t.name)) {
@@ -561,7 +579,7 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 				{
 					code: params.code,
 					work_dir: state.workDir,
-					model_path: params.model_path || state.modelPath,
+					model_path: resolveWorkspacePath(ctx.cwd, params.model_path) || state.modelPath,
 					timeout: Math.min(Number(params.timeout || 120), 900),
 					strict_no_grad: true,
 				},
@@ -733,7 +751,9 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const t0 = Date.now();
-			const dest = params.destination_dir || join(ctx.cwd, "models", params.repo_id.replace("/", "--"));
+			const dest =
+				resolveWorkspacePath(ctx.cwd, params.destination_dir) ||
+				join(ctx.cwd, "models", params.repo_id.replace("/", "--"));
 			const res = runWspEngine("hf_download", { ...params, destination_dir: dest }, state);
 			if (res.primary_model_path && params.set_as_active_model !== false) {
 				state.modelPath = res.primary_model_path;
@@ -776,9 +796,17 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 					description: "Output directory for the clean Hugging Face bundle (default: '<workDir>/outlines_cfg_bundle')",
 				}),
 			),
-			grammar: Type.String({
-				description: "CFG / EBNF / Lark context-free grammar specification",
-			}),
+			grammar: Type.Optional(
+				Type.String({
+					description: "Inline CFG / EBNF / Lark context-free grammar specification (omit when passing grammar_file)",
+				}),
+			),
+			grammar_file: Type.Optional(
+				Type.String({
+					description:
+						"Path to a CFG/EBNF/Lark grammar file on disk relative to workspace (preferred for large grammars such as sql-2016.ebnf)",
+				}),
+			),
 			operation: Type.Optional(
 				Type.Union(
 					[
@@ -791,7 +819,14 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 			),
 			prompts: Type.Optional(
 				Type.Array(Type.String(), {
-					description: "Calibration or verification prompts to steer/validate via Outlines teacher trajectories",
+					description:
+						"Calibration or verification prompts (prefer `prompts_file` for >2 or schema-rich prompts to avoid tool-call JSON truncation)",
+				}),
+			),
+			prompts_file: Type.Optional(
+				Type.String({
+					description:
+						"Path to a JSON/JSONL/text file on disk containing calibration or verification prompts (relative to workspace, e.g. '.wsp-work/prompts.json'). Preferred over inline `prompts` when passing multiple or schema-rich prompts to avoid tool-call JSON truncation.",
 				}),
 			),
 			system_prompt: Type.Optional(
@@ -815,13 +850,25 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 				Type.Boolean({ description: "Whether to apply tokenizer.apply_chat_template (default: true)" }),
 			),
 			gate_inhibition_strength: Type.Optional(
-				Type.Number({ description: "SwiGLU gate inhibition strength for forbidden tokens on sparse models (default: 15.0)" }),
+				Type.Number({ description: "SwiGLU gate inhibition strength for forbidden tokens on sparse MLPs or dense MLPs (bounded <=5% top-impact slice; default: 15.0)" }),
 			),
 			steering_gain: Type.Optional(
 				Type.Number({ description: "Down-projection gain along clean unembedding directions for dual-basis steering (default: 50.0)" }),
 			),
+			eos_steering_gain: Type.Optional(
+				Type.Number({ description: "Optional separate down-projection gain for accepting-state EOS steering neurons (defaults to steering_gain)" }),
+			),
+			max_dense_inhibition_neurons: Type.Optional(
+				Type.Number({ description: "Max final-layer SwiGLU neurons eligible for dense Mechanism A gate inhibition (capped at 5% of MLP capacity; 0 disables dense gating; default: 256)" }),
+			),
 			max_new_tokens: Type.Optional(
 				Type.Number({ description: "Maximum tokens generated during Outlines teacher trace and verification (default: 64)" }),
+			),
+			max_states: Type.Optional(
+				Type.Number({ description: "Max reachable CFG states explored during analyze_grammar / gate inhibition (default: 64)" }),
+			),
+			max_refinement_rounds: Type.Optional(
+				Type.Number({ description: "Max iterative closed-form steering rounds (default: 2)" }),
 			),
 			set_as_active_model: Type.Optional(
 				Type.Boolean({ description: "Bind exported Hugging Face bundle as the active checkpoint on compile (default: true)" }),
@@ -832,18 +879,23 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const t0 = Date.now();
-			const checkpoint = params.checkpoint || state.modelPath;
+			const checkpoint = resolveWorkspacePath(ctx.cwd, params.checkpoint) || state.modelPath;
 			if (!checkpoint) {
 				throw new Error("No checkpoint specified. Pass `checkpoint` or set `--wsp-model-path`.");
+			}
+			if (!params.grammar?.trim() && !params.grammar_file?.trim()) {
+				throw new Error("Provide either `grammar` or `grammar_file`.");
 			}
 			const toolsJson =
 				typeof params.tools_json === "string" ? JSON.parse(params.tools_json) : params.tools_json;
 			const payload: Record<string, unknown> = {
 				...params,
 				checkpoint,
+				grammar_file: resolveWorkspacePath(ctx.cwd, params.grammar_file),
+				prompts_file: resolveWorkspacePath(ctx.cwd, params.prompts_file),
 				tools_json: toolsJson,
 				operation: params.operation || "compile",
-				output_dir: params.output_dir ? resolve(ctx.cwd, params.output_dir) : undefined,
+				output_dir: resolveWorkspacePath(ctx.cwd, params.output_dir),
 			};
 			const res = runWspEngine("outlines_cfg", payload, state);
 			if (payload.operation === "compile") {
@@ -1250,7 +1302,6 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 				ctx.ui.notify(`Grammar file not found: ${resolvedGrammar}`, "error");
 				return;
 			}
-			const grammarText = readFileSync(resolvedGrammar, "utf-8");
 			const outDir = parts[1] ? resolve(ctx.cwd, parts[1]) : join(state.workDir, "outlines_cfg_bundle");
 			ctx.ui.notify(`Compiling CFG ${grammarFile} into ${state.modelPath} -> ${outDir}...`, "info");
 			try {
@@ -1260,7 +1311,7 @@ export default function weightSpaceProgrammingExtension(pi: ExtensionAPI) {
 						operation: "compile",
 						checkpoint: state.modelPath,
 						output_dir: outDir,
-						grammar: grammarText,
+						grammar_file: resolvedGrammar,
 					},
 					state,
 				);

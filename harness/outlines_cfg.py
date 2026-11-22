@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+import gc
 import json
 import os
 import random
@@ -43,6 +44,7 @@ HF_BUNDLE_FILES = (
     "generation_config.json",
     "tokenizer.json",
     "tokenizer_config.json",
+    "tokenizer.model",
     "vocab.json",
     "merges.txt",
     "special_tokens_map.json",
@@ -60,6 +62,7 @@ def _require_ml_stack():
         import llguidance.numpy
         import outlines
         import torch
+        from safetensors import safe_open
         from safetensors.torch import load_file, save_file
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from transformers.utils import logging as hf_logging
@@ -75,6 +78,7 @@ def _require_ml_stack():
         "llg": llguidance,
         "outlines": outlines,
         "torch": torch,
+        "safe_open": safe_open,
         "load_file": load_file,
         "save_file": save_file,
         "AutoModelForCausalLM": AutoModelForCausalLM,
@@ -104,16 +108,341 @@ def _resolve_checkpoint_dir(checkpoint_path: str) -> str:
     raise FileNotFoundError(f"Checkpoint path does not exist: {checkpoint_path!r}")
 
 
-def _parse_grammar_spec(llg_mod: Any, outlines_mod: Any, grammar: str) -> str:
-    """Validate and compile an EBNF or Lark CFG grammar via Outlines and LLGuidance."""
+_W3C_LEXER_TERMINALS: Dict[str, str] = {
+    "regular_identifier": "/[A-Za-z_][A-Za-z0-9_]*/",
+    "SQL_language_identifier": "/[A-Za-z][A-Za-z0-9_]*/",
+    "delimited_identifier": r'/"([^"\r\n]|"")+"/',
+    "character_string_literal": r"/'([^'\r\n]|'')*'/",
+    "national_character_string_literal": r"/[Nn]'([^'\r\n]|'')*'/",
+    "binary_string_literal": r"/[Xx]'[0-9A-Fa-f ]*'/",
+    "unsigned_integer": "/[0-9]+/",
+    "exact_numeric_literal": r"/([0-9]+(\.[0-9]*)?|\.[0-9]+)/",
+    "approximate_numeric_literal": r"/([0-9]+(\.[0-9]*)?|\.[0-9]+)[Ee][+-]?[0-9]+/",
+    "space": '" "',
+    "nondoublequote_character": r'/[^"\r\n]/',
+    "nonquote_character": r"/[^'\r\n]/",
+    "identifier_start": "/[A-Za-z_]/",
+    "identifier_extend": "/[A-Za-z0-9_]/",
+}
+
+
+def _resolve_safe_input_file(
+    path_str: str, param_name: str, missing_label: str
+) -> str:
+    """Resolve an input file path while blocking protected harness/eval directories."""
+    resolved = os.path.abspath(os.path.expanduser(str(path_str)))
+    real = os.path.realpath(resolved)
+    allow_eval = os.environ.get("WSP_ALLOW_EVAL_ACCESS") == "1"
+    protected_segments = {"eval", "evals", "harness", "extensions"}
+    protected_basenames = {
+        "run.sh",
+        "edit.sh",
+        "eval.sh",
+        "install-extension.sh",
+        "pyproject.toml",
+        "uv.lock",
+        "README.md",
+        "session.log",
+        "tool_calls.jsonl",
+    }
+    for cand in (resolved, real):
+        parts = cand.replace("\\", "/").split("/")
+        if not allow_eval and (set(parts) & protected_segments):
+            raise PermissionError(
+                f"Access to `{param_name}` inside protected directory is blocked: {path_str!r}"
+            )
+        if not allow_eval and os.path.basename(cand) in protected_basenames:
+            raise PermissionError(
+                f"Access to protected file via `{param_name}` is blocked: {path_str!r}"
+            )
+    if not os.path.isfile(resolved):
+        raise FileNotFoundError(f"{missing_label} not found: {path_str!r}")
+    return resolved
+
+
+def _load_grammar_text(args: Dict[str, Any]) -> str:
+    """Load grammar text from `grammar` or `grammar_file`, blocking protected paths."""
+    raw = args.get("grammar")
+    if isinstance(raw, str) and raw.strip():
+        return raw
+
+    grammar_file = args.get("grammar_file")
+    if grammar_file:
+        resolved = _resolve_safe_input_file(
+            str(grammar_file), "grammar_file", "Grammar file"
+        )
+        with open(resolved, "r", encoding="utf-8") as f:
+            text = f.read()
+        if not text.strip():
+            raise ValueError(f"Grammar file is empty: {grammar_file!r}")
+        return text
+
+    raise ValueError("Either `grammar` or `grammar_file` must be provided.")
+
+
+def _coerce_prompt_items(raw_items: Any) -> List[str]:
+    """Extract non-empty prompt strings from a sequence or {'prompts': ...} container."""
+    if isinstance(raw_items, dict) and "prompts" in raw_items:
+        raw_items = raw_items["prompts"]
+    if not isinstance(raw_items, list):
+        raise ValueError("Prompts JSON must be a list of strings or {'prompts': [...]}.")
+    clean: List[str] = []
+    for item in raw_items:
+        if isinstance(item, dict) and "prompt" in item:
+            val = str(item["prompt"])
+        elif item is None:
+            continue
+        else:
+            val = str(item)
+        if val.strip():
+            clean.append(val)
+    return clean
+
+
+def _load_prompts(
+    args: Dict[str, Any], effective_grammar: str
+) -> Tuple[List[str], str]:
+    """Resolve prompts from inline `prompts`, `prompts_file`, or grammar fallback."""
+    raw_prompts = args.get("prompts")
+    if isinstance(raw_prompts, str) and raw_prompts.strip():
+        stripped = raw_prompts.lstrip()
+        if stripped.startswith(("[", "{")):
+            try:
+                clean = _coerce_prompt_items(json.loads(raw_prompts))
+                if clean:
+                    return clean, "inline"
+            except Exception:
+                pass
+        return [raw_prompts], "inline"
+    if isinstance(raw_prompts, list):
+        clean = _coerce_prompt_items(raw_prompts)
+        if clean:
+            return clean, "inline"
+
+    prompts_file = args.get("prompts_file")
+    if prompts_file:
+        resolved = _resolve_safe_input_file(
+            str(prompts_file), "prompts_file", "Prompts file"
+        )
+        with open(resolved, "r", encoding="utf-8") as f:
+            text = f.read()
+        if not text.strip():
+            raise ValueError(f"Prompts file contains no valid prompts: {prompts_file!r}")
+        clean: List[str] = []
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, str):
+                clean = [parsed] if parsed.strip() else []
+            else:
+                clean = _coerce_prompt_items(parsed)
+        except json.JSONDecodeError:
+            lines = [ln for ln in text.splitlines() if ln.strip()]
+            parsed_lines: List[Any] = []
+            all_json = True
+            for ln in lines:
+                try:
+                    parsed_lines.append(json.loads(ln))
+                except json.JSONDecodeError:
+                    all_json = False
+                    break
+            if all_json and parsed_lines:
+                clean = _coerce_prompt_items(parsed_lines)
+            else:
+                clean = [ln.strip() for ln in lines if ln.strip()]
+        if not clean:
+            raise ValueError(f"Prompts file contains no valid prompts: {prompts_file!r}")
+        return clean, "prompts_file"
+
+    return _synthesize_default_prompts(effective_grammar), "synthesized_fallback"
+
+
+def _normalize_ebnf_literal(lit: str) -> str:
+    """Escape W3C EBNF literal to Lark double-quoted string and strip Bottlecaps '*' markers."""
+    inner = lit[1:-1]
+    if re.fullmatch(r"[A-Za-z][A-Za-z0-9_ -]*\*", inner):
+        inner = inner[:-1]
+    return '"' + inner.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def convert_w3c_ebnf_to_lark(grammar: str) -> Tuple[str, Dict[str, Any]]:
+    """Deterministically translate W3C/ISO EBNF (`::=`) into LLGuidance Lark syntax."""
+    text = re.sub(r"/\*.*?\*/", "", grammar, flags=re.S)
+    text = re.sub(r"(?m)//[^\n]*$", "", text)
+    chunks = re.split(r"(?m)^\s*([A-Za-z_][A-Za-z0-9_-]*)\s*::=", text)
+    if len(chunks) < 3:
+        raise ValueError("Grammar does not contain W3C/ISO EBNF `::=` rules.")
+
+    rules: Dict[str, List[str]] = {}
+    order: List[str] = []
+    for i in range(1, len(chunks), 2):
+        name = chunks[i].strip()
+        body = " ".join(chunks[i + 1].split())
+        if not body:
+            continue
+        if name not in rules:
+            order.append(name)
+            rules[name] = [body]
+        else:
+            rules[name].append(body)
+
+    if not order:
+        raise ValueError("No valid W3C/ISO EBNF productions found.")
+
+    token_rx = re.compile(r'("[^"]*"|\'[^\']*\'|[A-Za-z_][A-Za-z0-9_.-]*)')
+    referenced_or_defined: Set[str] = set(order)
+    for bs in rules.values():
+        for b in bs:
+            for m in token_rx.finditer(b):
+                tok = m.group(0)
+                if not (tok.startswith('"') or tok.startswith("'")):
+                    referenced_or_defined.add(tok)
+
+    active_lexer_terminals = {
+        k: v for k, v in _W3C_LEXER_TERMINALS.items() if k in referenced_or_defined
+    }
+
+    sym_map: Dict[str, str] = {}
+    used_lower: Set[str] = set()
+    for name in order:
+        cand = "r_" + re.sub(r"[^a-z0-9_]", "_", name.lower())
+        while cand in used_lower:
+            cand = f"{cand}_{len(used_lower)}"
+        used_lower.add(cand)
+        sym_map[name] = cand
+
+    for k in active_lexer_terminals:
+        if k not in sym_map:
+            cand = "r_" + re.sub(r"[^a-z0-9_]", "_", k.lower())
+            while cand in used_lower:
+                cand = f"{cand}_{len(used_lower)}"
+            used_lower.add(cand)
+            sym_map[k] = cand
+            order.append(k)
+            rules[k] = []
+
+    # Inline single-literal productions (keywords/punctuation) to compact the Earley graph
+    literal_inlines: Dict[str, str] = {}
+    for name in order:
+        if name in active_lexer_terminals or len(rules[name]) != 1:
+            continue
+        b = rules[name][0].strip()
+        m = re.fullmatch(r'("[^"]+"|\'[^\']+\')', b)
+        if m:
+            literal_inlines[name] = _normalize_ebnf_literal(m.group(0))
+
+    def _convert_body(body: str) -> str:
+        out: List[str] = []
+        pos = 0
+        for m in token_rx.finditer(body):
+            out.append(body[pos : m.start()])
+            tok = m.group(0)
+            if tok.startswith('"') or tok.startswith("'"):
+                out.append(_normalize_ebnf_literal(tok))
+            elif tok in literal_inlines:
+                out.append(literal_inlines[tok])
+            elif tok in sym_map:
+                out.append(sym_map[tok])
+            else:
+                out.append(
+                    '"' + tok.replace("\\", "\\\\").replace('"', '\\"') + '"'
+                )
+            pos = m.end()
+        out.append(body[pos:])
+        return "".join(out)
+
+    # Prune productions unreachable from the entry rule (e.g., host-language embeddings)
+    adj: Dict[str, List[str]] = {}
+    for name in order:
+        if name in active_lexer_terminals or name in literal_inlines:
+            adj[name] = []
+            continue
+        refs: List[str] = []
+        for m in token_rx.finditer(" ".join(rules[name])):
+            tok = m.group(0)
+            if (
+                not (tok.startswith('"') or tok.startswith("'"))
+                and tok in sym_map
+                and tok not in literal_inlines
+            ):
+                refs.append(tok)
+        adj[name] = refs
+
+    reachable: Set[str] = set()
+    stack = [order[0]]
+    while stack:
+        cur = stack.pop()
+        if cur in reachable:
+            continue
+        reachable.add(cur)
+        for nxt in adj.get(cur, []):
+            if nxt not in reachable:
+                stack.append(nxt)
+
+    lines = [rf'start: " "? {sym_map[order[0]]}']
+    for name in order:
+        if name not in reachable or name in literal_inlines:
+            continue
+        if name in active_lexer_terminals:
+            lines.append(f"{sym_map[name]}: {active_lexer_terminals[name]}")
+            continue
+        bodies = rules[name]
+        if len(bodies) > 1:
+            combined = " | ".join(f"( {_convert_body(b)} )" for b in bodies)
+        else:
+            combined = _convert_body(bodies[0])
+        lines.append(f"{sym_map[name]}: {combined}")
+    lines.append(r"%ignore /[ \t\r\n]+/")
+
+    lark_text = "\n".join(lines)
+    meta = {
+        "format": "w3c_ebnf_to_lark",
+        "converted_from": "w3c_ebnf",
+        "entry_rule": order[0],
+        "total_rules": len(order),
+        "inlined_literals": len(literal_inlines),
+        "reachable_rules": len(reachable),
+    }
+    return lark_text, meta
+
+
+def _parse_grammar_spec(
+    llg_mod: Any,
+    outlines_mod: Any,
+    grammar: str,
+    llg_tok: Any = None,
+) -> Tuple[str, str, Dict[str, Any]]:
+    """Validate and compile GBNF, Lark, or W3C/ISO EBNF grammar via Outlines and LLGuidance."""
     if not grammar or not grammar.strip():
         raise ValueError("`grammar` must be a non-empty CFG/EBNF/Lark specification.")
-    # Validate Outlines CFG wrapper compatibility
-    outlines_mod.cfg(grammar)
-    try:
-        return llg_mod.grammar_from("grammar", grammar)
-    except ValueError:
-        return llg_mod.grammar_from("lark", grammar)
+
+    last_err: Optional[str] = None
+    for fmt in ("grammar", "lark"):
+        try:
+            spec = llg_mod.grammar_from(fmt, grammar)
+        except ValueError as exc:
+            last_err = str(exc)
+            continue
+        if llg_tok is not None:
+            matcher = llg_mod.LLMatcher(llg_tok, spec)
+            if matcher.is_error():
+                last_err = matcher.get_error()
+                continue
+        outlines_mod.cfg(grammar)
+        return grammar, spec, {"format": fmt, "converted_from": None}
+
+    if "::=" in grammar:
+        effective_lark, meta = convert_w3c_ebnf_to_lark(grammar)
+        spec = llg_mod.grammar_from("lark", effective_lark)
+        if llg_tok is not None:
+            matcher = llg_mod.LLMatcher(llg_tok, spec)
+            if matcher.is_error():
+                raise ValueError(
+                    f"Converted W3C EBNF grammar failed LLMatcher validation: {matcher.get_error()}"
+                )
+        outlines_mod.cfg(effective_lark)
+        return effective_lark, spec, meta
+
+    raise ValueError(f"Failed to parse grammar specification: {last_err or 'invalid grammar'}")
 
 
 def _get_allowed_tokens(
@@ -273,7 +602,13 @@ def _synthesize_default_prompts(grammar: str) -> List[str]:
     clean_lits = []
     for lit in literals:
         s = lit.strip()
-        if s and any(ch.isalnum() for ch in s) and s not in clean_lits:
+        if (
+            s
+            and not s.startswith("!!")
+            and "See the Syntax Rules" not in s
+            and any(ch.isalnum() for ch in s)
+            and s not in clean_lits
+        ):
             clean_lits.append(s)
         if len(clean_lits) >= 4:
             break
@@ -491,51 +826,77 @@ def _apply_swiglu_grammar_gate_inhibition(
     embed_w: Any,
     gamma: Any,
     gate_w: Any,
+    up_w: Any,
     down_w: Any,
     anchor_prompts: List[str],
     gate_inhibition_strength: float,
     max_states: int,
     device: str,
     extra_prefixes: Optional[List[Tuple[int, ...]]] = None,
-) -> Dict[str, Any]:
-    """Mechanistically inhibit active sparse SwiGLU neurons that emit CFG-forbidden tokens."""
+    max_dense_neurons: int = 256,
+) -> Tuple[Dict[str, Any], Set[int]]:
+    """Mechanistically inhibit active SwiGLU neurons that emit CFG-forbidden tokens."""
     torch_mod = ml["torch"]
     llg_mod = ml["llg"]
 
     col_norms = down_w.norm(dim=0)
     total_neurons = int(down_w.shape[1])
-    active_neurons = torch_mod.nonzero(col_norms > 1e-6).squeeze(-1).tolist()
-    if not active_neurons or len(active_neurons) > min(512, total_neurons // 2):
-        return {
-            "applied": False,
-            "reason": f"Final layer MLP has {len(active_neurons)}/{total_neurons} active neurons (dense; skipping sparse neuron gating).",
-            "active_neurons": len(active_neurons),
-        }
+    active_neurons = torch_mod.nonzero(col_norms > 1e-6).reshape(-1).tolist()
+    if not active_neurons:
+        return (
+            {
+                "applied": False,
+                "reason": "Final layer MLP has 0 active neurons.",
+                "active_neurons": 0,
+                "total_neurons": total_neurons,
+            },
+            set(),
+        )
 
-    # Map each active neuron j to the vocabulary token it writes most strongly to
+    is_dense = len(active_neurons) > min(512, total_neurons // 2)
+    if is_dense and max_dense_neurons <= 0:
+        return (
+            {
+                "applied": False,
+                "reason": "max_dense_inhibition_neurons <= 0 (dense gating disabled).",
+                "active_neurons": len(active_neurons),
+                "total_neurons": total_neurons,
+            },
+            set(),
+        )
+
     neuron_token: Dict[int, int] = {}
-    for j in active_neurons:
-        logits_j = embed_w @ (down_w[:, j] * gamma)
-        neuron_token[j] = int(logits_j.argmax().item())
-    active_vocab = set(neuron_token.values())
+    if not is_dense:
+        logits_sel = embed_w @ (down_w[:, active_neurons] * gamma.unsqueeze(1))
+        top_toks = logits_sel.argmax(dim=0).tolist()
+        neuron_token = {int(j): int(t) for j, t in zip(active_neurons, top_toks)}
+        priority_tokens: Optional[Set[int]] = set(neuron_token.values())
+    else:
+        priority_tokens = None
 
     explored = _explore_grammar_states(
         llg_mod,
         llg_tok,
         g_spec,
         tokenizer,
-        priority_tokens=active_vocab,
+        priority_tokens=priority_tokens,
         max_states=max_states,
         branch_limit=16,
     )
 
-    # Merge any extra teacher trajectory prefixes not already present
+    # Merge extra teacher trajectory prefixes up to 2x max_states cap
     eos_id = getattr(tokenizer, "eos_token_id", None)
     vocab_size = int(llg_tok.vocab_size)
     bitmask = llg_mod.numpy.allocate_token_bitmask(1, vocab_size)
     known_prefixes = {tuple(st["prefix_ids"]) for st in explored}
     if extra_prefixes:
-        for pref in extra_prefixes:
+        unique_extra = sorted(
+            {tuple(int(t) for t in pref) for pref in extra_prefixes},
+            key=lambda p: (len(p), p),
+        )
+        for pref in unique_extra:
+            if len(explored) >= max_states * 2:
+                break
             if pref in known_prefixes:
                 continue
             m = llg_mod.LLMatcher(llg_tok, g_spec)
@@ -555,7 +916,20 @@ def _apply_swiglu_grammar_gate_inhibition(
             )
             known_prefixes.add(pref)
 
-    # Collect final-layer MLP pre-activation states across anchor prompts & grammar prefixes
+    # Collect final-layer MLP pre-activation states via maximal-prefix grouping
+    prefix_to_sidx: Dict[Tuple[int, ...], int] = {
+        tuple(st["prefix_ids"]): s_idx for s_idx, st in enumerate(explored)
+    }
+    sorted_prefixes = sorted(prefix_to_sidx.keys(), key=lambda p: (-len(p), p))
+    maximal_prefixes: List[Tuple[int, ...]] = []
+    covered_prefixes: Set[Tuple[int, ...]] = set()
+    for pref in sorted_prefixes:
+        if pref in covered_prefixes:
+            continue
+        maximal_prefixes.append(pref)
+        for k in range(len(pref) + 1):
+            covered_prefixes.add(pref[:k])
+
     mlp_in: Dict[str, Any] = {}
     hook = spec["mlp_module"].register_forward_pre_hook(
         lambda _mod, inp: mlp_in.__setitem__("x", inp[0].detach().float().cpu())
@@ -563,26 +937,41 @@ def _apply_swiglu_grammar_gate_inhibition(
 
     train_x: List[Any] = []
     train_y: List[int] = []
+    rows_by_state: Dict[int, List[int]] = {}
     try:
-        for p_text in anchor_prompts[:3]:
-            p_ids = tokenizer.encode(p_text, add_special_tokens=False)
-            for s_idx, st in enumerate(explored):
-                pref = list(st["prefix_ids"])
-                seq = p_ids + pref
-                inp_t = torch_mod.tensor([seq], dtype=torch_mod.long, device=device)
-                _ = model(inp_t)
-                train_x.append(mlp_in["x"][0, -1, :])
-                train_y.append(s_idx)
+        with torch_mod.no_grad():
+            for p_text in anchor_prompts[:3]:
+                p_ids = tokenizer.encode(p_text, add_special_tokens=True)
+                if not p_ids:
+                    continue
+                captured_sidxs: Set[int] = set()
+                for pref in maximal_prefixes:
+                    seq = p_ids + list(pref)
+                    inp_t = torch_mod.tensor([seq], dtype=torch_mod.long, device=device)
+                    _ = model(inp_t)
+                    xs = mlp_in["x"][0]
+                    base_pos = len(p_ids) - 1
+                    for k in range(len(pref) + 1):
+                        s_idx = prefix_to_sidx.get(pref[:k])
+                        if s_idx is not None and s_idx not in captured_sidxs:
+                            captured_sidxs.add(s_idx)
+                            rows_by_state.setdefault(s_idx, []).append(len(train_x))
+                            train_x.append(xs[base_pos + k])
+                            train_y.append(s_idx)
     finally:
         hook.remove()
 
     n_states = len(explored)
     if not train_x or n_states == 0:
-        return {
-            "applied": False,
-            "reason": "No reachable grammar states extracted.",
-            "active_neurons": len(active_neurons),
-        }
+        return (
+            {
+                "applied": False,
+                "reason": "No reachable grammar states extracted.",
+                "active_neurons": len(active_neurons),
+                "total_neurons": total_neurons,
+            },
+            set(),
+        )
 
     A = torch_mod.stack(train_x)
     Y = torch_mod.zeros(len(train_x), n_states, dtype=torch_mod.float32)
@@ -591,27 +980,79 @@ def _apply_swiglu_grammar_gate_inhibition(
 
     W_state = _solve_ridge_dual_basis(torch_mod, A, Y, min_reg=1e-2)
 
+    touched_neurons: Set[int] = set()
     gated_updates = 0
-    for s_idx, st in enumerate(explored):
-        allowed_set = st["allowed"]
-        w_s = W_state[:, s_idx]
-        for j in active_neurons:
-            if neuron_token[j] not in allowed_set:
-                gate_w[j] = gate_w[j] - gate_inhibition_strength * w_s
-                gated_updates += 1
+    if not is_dense:
+        mode = "sparse_all_active"
+        target_neurons = list(active_neurons)
+        for s_idx, st in enumerate(explored):
+            allowed_set = st["allowed"]
+            w_s = W_state[:, s_idx]
+            for j in target_neurons:
+                if neuron_token[j] not in allowed_set:
+                    gate_w[j] = gate_w[j] - gate_inhibition_strength * w_s
+                    touched_neurons.add(j)
+                    gated_updates += 1
+    else:
+        mode = "dense_top_impact_slice"
+        dense_budget = min(int(max_dense_neurons), max(1, int(total_neurons * 0.05)))
+        gate_pre = A @ gate_w.T  # (N_samples, total_neurons)
+        up_pre = A @ up_w.T      # (N_samples, total_neurons)
+        h_act = torch_mod.nn.functional.silu(gate_pre) * up_pre
+        neuron_impact = h_act.abs().mean(dim=0) * col_norms
+        top_k = min(dense_budget, len(active_neurons))
+        active_idx_t = torch_mod.tensor(active_neurons, dtype=torch_mod.long)
+        top_rel = torch_mod.topk(neuron_impact[active_idx_t], k=top_k).indices.tolist()
+        target_neurons = [int(active_neurons[idx]) for idx in top_rel]
 
-    return {
-        "applied": True,
-        "active_neurons": len(active_neurons),
-        "states_compiled": n_states,
-        "gated_neuron_state_pairs": gated_updates,
-    }
+        scaled_down = down_w[:, target_neurons] * gamma.unsqueeze(1)
+        logits_sel = embed_w @ scaled_down
+        pos_toks = logits_sel.argmax(dim=0).tolist()
+        neg_toks = logits_sel.argmin(dim=0).tolist()
+
+        for s_idx, st in enumerate(explored):
+            row_idxs = rows_by_state.get(s_idx)
+            if not row_idxs:
+                continue
+            allowed_set = st["allowed"]
+            w_s = W_state[:, s_idx]
+            gate_s = gate_pre[row_idxs][:, target_neurons].mean(dim=0)
+            up_s = up_pre[row_idxs][:, target_neurons].mean(dim=0)
+            for idx, j in enumerate(target_neurons):
+                if float(gate_s[idx]) <= -1.0:
+                    continue
+                emitted_tok = (
+                    int(pos_toks[idx])
+                    if float(up_s[idx]) >= 0.0
+                    else int(neg_toks[idx])
+                )
+                if emitted_tok not in allowed_set:
+                    gate_w[j] = gate_w[j] - gate_inhibition_strength * w_s
+                    touched_neurons.add(j)
+                    gated_updates += 1
+
+    return (
+        {
+            "applied": gated_updates > 0,
+            "mode": mode,
+            "active_neurons": len(active_neurons),
+            "selected_neurons": len(target_neurons),
+            "inhibited_neurons_count": len(touched_neurons),
+            "total_neurons": total_neurons,
+            "capacity_fraction": round(len(target_neurons) / total_neurons, 4),
+            "states_compiled": n_states,
+            "gated_neuron_state_pairs": gated_updates,
+        },
+        touched_neurons,
+    )
 
 
 def _apply_teacher_dual_basis_steering(
     ml: Dict[str, Any],
     model: Any,
     tokenizer: Any,
+    llg_tok: Any,
+    g_spec: str,
     spec: Dict[str, Any],
     get_clean_dir: Any,
     d_model: int,
@@ -623,9 +1064,33 @@ def _apply_teacher_dual_basis_steering(
     max_rounds: int,
     device: str,
     model_dtype: Any,
+    eos_steering_gain: Optional[float] = None,
+    reserved_neurons: Optional[Set[int]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Run closed-form Outlines teacher trajectory steering into spare final-layer MLP slots."""
     torch_mod = ml["torch"]
+    llg_mod = ml["llg"]
+    eos_id = getattr(tokenizer, "eos_token_id", None)
+    eff_eos_gain = float(
+        steering_gain if eos_steering_gain is None else eos_steering_gain
+    )
+
+    if not teacher_token_seqs or all(not seq for seq in teacher_token_seqs):
+        return (
+            {k: v.clone() for k, v in orig_weights.items()},
+            {
+                "rounds_executed": 0,
+                "intervened_states": 0,
+                "aligned_control_states": 0,
+                "neurons_allocated": 0,
+                "eos_intervened_states": 0,
+                "eos_neurons_allocated": 0,
+                "eos_non_accepting_guard_states": 0,
+                "eos_steering_pooled": False,
+                "reason": "No valid grammar-accepted Outlines teacher trajectories available for steering.",
+            },
+        )
+
     mlp_type = spec["mlp_type"]
     tensors = spec["mlp_tensors"]
 
@@ -642,10 +1107,39 @@ def _apply_teacher_dual_basis_steering(
         free_pool = torch_mod.argsort(out_norms).tolist()
         is_fp8 = False
 
+    if reserved_neurons:
+        free_pool = [n for n in free_pool if n not in reserved_neurons]
+
+    # Compute grammar-agnostic CFG accepting status for every trajectory step via LLMatcher
+    accepting_map: Dict[Tuple[int, int], bool] = {}
+    for p_idx, tgt_ids in enumerate(teacher_token_seqs):
+        if not tgt_ids:
+            continue
+        m = llg_mod.LLMatcher(llg_tok, g_spec)
+        errored = False
+        for k, t_id in enumerate(tgt_ids):
+            t_int = int(t_id)
+            if eos_id is not None and t_int == int(eos_id):
+                accepting_map[(p_idx, k)] = (
+                    True if errored else bool(m.is_accepting())
+                )
+                break
+            if errored:
+                accepting_map[(p_idx, k)] = False
+                continue
+            accepting_map[(p_idx, k)] = bool(m.is_accepting())
+            if not m.consume_token(t_int) or m.is_error():
+                errored = True
+
     s_dict: Dict[Tuple[int, int], Tuple[Any, int]] = {}
-    c_dict: Dict[Tuple[int, int], Any] = {}
+    c_dict: Dict[Tuple[int, int], Tuple[Any, int]] = {}
     working_weights = {k: v.clone() for k, v in orig_weights.items()}
     rounds_run = 0
+    last_neurons_allocated = 0
+    last_eos_intervened = 0
+    last_eos_neurons = 0
+    last_eos_guard_states = 0
+    last_eos_pooled = False
 
     for rnd in range(max_rounds):
         rounds_run = rnd + 1
@@ -659,27 +1153,30 @@ def _apply_teacher_dual_basis_steering(
         hook = spec["mlp_module"].register_forward_pre_hook(_capture_mlp_in)
         new_s = 0
         try:
-            for p_idx, (p_text, tgt_ids) in enumerate(
-                zip(formatted_prompts, teacher_token_seqs, strict=True)
-            ):
-                if not tgt_ids:
-                    continue
-                p_ids = tokenizer.encode(p_text, add_special_tokens=False)
-                seq = p_ids + tgt_ids[:-1]
-                inp_t = torch_mod.tensor([seq], dtype=torch_mod.long, device=device)
-                out = model(inp_t)
-                xs = mlp_in["x"][0]
-                start = len(p_ids) - 1
-                for k, t_id in enumerate(tgt_ids):
-                    pos = start + k
-                    key = (p_idx, k)
-                    raw_top = int(out.logits[0, pos].argmax().item())
-                    if raw_top != t_id and key not in s_dict:
-                        s_dict[key] = (xs[pos], int(t_id))
-                        c_dict.pop(key, None)
-                        new_s += 1
-                    elif rnd == 0 and key not in s_dict:
-                        c_dict[key] = xs[pos]
+            with torch_mod.no_grad():
+                for p_idx, (p_text, tgt_ids) in enumerate(
+                    zip(formatted_prompts, teacher_token_seqs, strict=True)
+                ):
+                    if not tgt_ids:
+                        continue
+                    p_ids = tokenizer.encode(p_text, add_special_tokens=True)
+                    seq = p_ids + tgt_ids[:-1]
+                    inp_t = torch_mod.tensor(
+                        [seq], dtype=torch_mod.long, device=device
+                    )
+                    out = model(inp_t)
+                    xs = mlp_in["x"][0]
+                    start = len(p_ids) - 1
+                    for k, t_id in enumerate(tgt_ids):
+                        pos = start + k
+                        key = (p_idx, k)
+                        raw_top = int(out.logits[0, pos].argmax().item())
+                        if raw_top != t_id and key not in s_dict:
+                            s_dict[key] = (xs[pos], int(t_id))
+                            c_dict.pop(key, None)
+                            new_s += 1
+                        elif rnd == 0 and key not in s_dict:
+                            c_dict[key] = (xs[pos], int(t_id))
         finally:
             hook.remove()
 
@@ -688,23 +1185,112 @@ def _apply_teacher_dual_basis_steering(
 
         s_keys = sorted(s_dict.keys())
         c_keys = sorted(c_dict.keys())
+        all_keys = s_keys + c_keys
         S = torch_mod.stack([s_dict[k][0] for k in s_keys])
-        t_list = [s_dict[k][1] for k in s_keys]
+        s_targets = [s_dict[k][1] for k in s_keys]
+        c_targets = [c_dict[k][1] for k in c_keys]
+        all_targets = s_targets + c_targets
         if c_keys:
-            C = torch_mod.stack([c_dict[k] for k in c_keys])
+            C = torch_mod.stack([c_dict[k][0] for k in c_keys])
             A = torch_mod.cat([S, C], dim=0)
         else:
             A = S
 
-        n_s = S.shape[0]
-        if n_s > len(free_pool):
+        non_eos_rows = [
+            i
+            for i, t in enumerate(s_targets)
+            if eos_id is None or int(t) != int(eos_id)
+        ]
+        eos_rows = [
+            i
+            for i, t in enumerate(s_targets)
+            if eos_id is not None and int(t) == int(eos_id)
+        ]
+
+        if non_eos_rows:
+            Y_content = torch_mod.zeros(
+                A.shape[0], len(non_eos_rows), dtype=torch_mod.float32
+            )
+            for col_j, row_i in enumerate(non_eos_rows):
+                Y_content[row_i, col_j] = 1.0
+        else:
+            Y_content = None
+
+        if eos_rows:
+            eos_row_set = set(eos_rows)
+            guard_rows = [
+                r
+                for r in range(len(all_keys))
+                if r not in eos_row_set
+                and (
+                    (not accepting_map.get(all_keys[r], False))
+                    or (int(all_targets[r]) != int(eos_id))
+                )
+            ]
+            y_eos = torch_mod.zeros(A.shape[0], 1, dtype=torch_mod.float32)
+            y_eos[eos_rows, 0] = 1.0
+            if guard_rows:
+                y_eos[guard_rows, 0] = -0.5
+            y_ones = torch_mod.ones(A.shape[0], 1, dtype=torch_mod.float32)
+
+            Y_solve = (
+                torch_mod.cat([Y_content, y_eos, y_ones], dim=1)
+                if Y_content is not None
+                else torch_mod.cat([y_eos, y_ones], dim=1)
+            )
+            W_solve = _solve_ridge_dual_basis(torch_mod, A, Y_solve, min_reg=1e-2)
+            W_content = (
+                W_solve[:, : len(non_eos_rows)] if Y_content is not None else None
+            )
+            w_eos = W_solve[:, -2]
+            w_ones = W_solve[:, -1]
+
+            eos_min = float((A[eos_rows] @ w_eos).min().item())
+            guard_max = (
+                float((A[guard_rows] @ w_eos).max().item()) if guard_rows else -1.0
+            )
+            ones_min = float((A[eos_rows] @ w_ones).min().item())
+            use_pooled_eos = (eos_min > 0.5) and (guard_max < 0.0)
+            use_ones_up = ones_min > 0.5
+
+            if use_pooled_eos:
+                eos_specs = [(w_eos, w_ones if use_ones_up else w_eos)]
+            else:
+                Y_eos_indiv = torch_mod.zeros(
+                    A.shape[0], len(eos_rows), dtype=torch_mod.float32
+                )
+                for j_col, row_i in enumerate(eos_rows):
+                    Y_eos_indiv[row_i, j_col] = 1.0
+                if guard_rows:
+                    Y_eos_indiv[guard_rows, :] = -0.5
+                W_eos_indiv = _solve_ridge_dual_basis(
+                    torch_mod, A, Y_eos_indiv, min_reg=1e-2
+                )
+                eos_specs = [
+                    (
+                        W_eos_indiv[:, j_col],
+                        w_ones if use_ones_up else W_eos_indiv[:, j_col],
+                    )
+                    for j_col in range(len(eos_rows))
+                ]
+        else:
+            guard_rows = []
+            use_pooled_eos = False
+            W_content = (
+                _solve_ridge_dual_basis(torch_mod, A, Y_content, min_reg=1e-2)
+                if Y_content is not None
+                else None
+            )
+            eos_specs = []
+
+        n_content = len(non_eos_rows)
+        n_eos_neurons = len(eos_specs)
+        total_needed = n_content + n_eos_neurons
+        if total_needed > len(free_pool):
             raise ValueError(
-                f"Required {n_s} steering neurons, exceeding final-layer MLP capacity {len(free_pool)}."
+                f"Required {total_needed} steering neurons, exceeding available final-layer MLP capacity {len(free_pool)}."
             )
 
-        Y = torch_mod.zeros(A.shape[0], n_s, dtype=torch_mod.float32)
-        Y[:n_s, :] = torch_mod.eye(n_s, dtype=torch_mod.float32)
-        W = _solve_ridge_dual_basis(torch_mod, A, Y, min_reg=1e-2)
         u_mean = A.mean(dim=0)
         u_hat = u_mean / (u_mean.norm() + 1e-12)
 
@@ -713,14 +1299,33 @@ def _apply_teacher_dual_basis_steering(
             gate_w = working_weights[tensors["gate"]]
             up_w = working_weights[tensors["up"]]
             down_w = working_weights[tensors["down"]]
-            for i, n_idx in enumerate(free_pool[:n_s]):
-                g_vec = 20.0 * W[:, i]
-                u_vec = 5.0 * W[:, i]
-                d_vec = get_clean_dir(t_list[i]) * steering_gain
+            for i in range(n_content):
+                n_idx = free_pool[i]
+                w_col = W_content[:, i]
+                t_id = s_targets[non_eos_rows[i]]
+                g_vec = 20.0 * w_col
+                u_vec = 5.0 * w_col
+                d_vec = get_clean_dir(t_id) * steering_gain
                 if is_fp8:
                     max_g = float(g_vec.abs().max())
                     if max_g > 200.0:
                         scale = 200.0 / max_g
+                        g_vec = g_vec * scale
+                        u_vec = u_vec * scale
+                        d_vec = d_vec / (scale * scale)
+                gate_w[n_idx] = g_vec
+                up_w[n_idx] = u_vec
+                down_w[:, n_idx] = d_vec
+
+            for j, (w_g_eos, w_u_eos) in enumerate(eos_specs):
+                n_idx = free_pool[n_content + j]
+                g_vec = 20.0 * w_g_eos
+                u_vec = 5.0 * w_u_eos
+                d_vec = get_clean_dir(int(eos_id)) * eff_eos_gain
+                if is_fp8:
+                    max_gu = max(float(g_vec.abs().max()), float(u_vec.abs().max()))
+                    if max_gu > 200.0:
+                        scale = 200.0 / max_gu
                         g_vec = g_vec * scale
                         u_vec = u_vec * scale
                         d_vec = d_vec / (scale * scale)
@@ -737,9 +1342,12 @@ def _apply_teacher_dual_basis_steering(
             )
             in_conv1d = fc_in_w.shape[0] == d_model and fc_in_w.shape[1] != d_model
             out_conv1d = fc_out_w.shape[1] == d_model and fc_out_w.shape[0] != d_model
-            for i, n_idx in enumerate(free_pool[:n_s]):
-                in_vec = 25.0 * W[:, i] - 0.8 * u_hat
-                out_vec = get_clean_dir(t_list[i]) * steering_gain
+            for i in range(n_content):
+                n_idx = free_pool[i]
+                w_col = W_content[:, i]
+                t_id = s_targets[non_eos_rows[i]]
+                in_vec = 25.0 * w_col - 0.8 * u_hat
+                out_vec = get_clean_dir(t_id) * steering_gain
                 if in_conv1d:
                     fc_in_w[:, n_idx] = in_vec
                 else:
@@ -750,6 +1358,27 @@ def _apply_teacher_dual_basis_steering(
                     fc_out_w[n_idx, :] = out_vec
                 else:
                     fc_out_w[:, n_idx] = out_vec
+
+            for j, (w_g_eos, _w_u_eos) in enumerate(eos_specs):
+                n_idx = free_pool[n_content + j]
+                in_vec = 25.0 * w_g_eos - 0.8 * u_hat
+                out_vec = get_clean_dir(int(eos_id)) * eff_eos_gain
+                if in_conv1d:
+                    fc_in_w[:, n_idx] = in_vec
+                else:
+                    fc_in_w[n_idx, :] = in_vec
+                if fc_in_b is not None:
+                    fc_in_b[n_idx] = -12.0
+                if out_conv1d:
+                    fc_out_w[n_idx, :] = out_vec
+                else:
+                    fc_out_w[:, n_idx] = out_vec
+
+        last_neurons_allocated = total_needed
+        last_eos_intervened = len(eos_rows)
+        last_eos_neurons = n_eos_neurons
+        last_eos_guard_states = len(guard_rows)
+        last_eos_pooled = bool(use_pooled_eos)
 
         # Update live model parameters (with target storage dtype quantization round-trip) for next pass
         for k, tensor_val in working_weights.items():
@@ -767,7 +1396,11 @@ def _apply_teacher_dual_basis_steering(
         "rounds_executed": rounds_run,
         "intervened_states": len(s_dict),
         "aligned_control_states": len(c_dict),
-        "neurons_allocated": len(s_dict),
+        "neurons_allocated": last_neurons_allocated,
+        "eos_intervened_states": last_eos_intervened,
+        "eos_neurons_allocated": last_eos_neurons,
+        "eos_non_accepting_guard_states": last_eos_guard_states,
+        "eos_steering_pooled": last_eos_pooled,
     }
     return working_weights, stats
 
@@ -775,16 +1408,22 @@ def _apply_teacher_dual_basis_steering(
 def _load_model_for_inference(
     ml: Dict[str, Any], model_dir: str, device_pref: str = "auto"
 ):
-    """Load tokenizer + model cleanly, upcasting FP8 weights to float32 in memory if needed."""
+    """Load tokenizer + model cleanly, inspecting headers without loading full shards."""
     torch_mod = ml["torch"]
     AutoTokenizer = ml["AutoTokenizer"]
     AutoModelForCausalLM = ml["AutoModelForCausalLM"]
 
+    from prelude import read_safetensors_header
+
     st_files, _ = _find_safetensors_files(model_dir, [])
     has_fp8 = False
     for sf in st_files:
-        raw = ml["load_file"](sf)
-        if any(str(v.dtype) == "torch.float8_e4m3fn" for v in raw.values()):
+        hdr, _ = read_safetensors_header(sf)
+        if any(
+            isinstance(meta, dict) and meta.get("dtype") == "F8_E4M3"
+            for k, meta in hdr.items()
+            if k != "__metadata__"
+        ):
             has_fp8 = True
             break
 
@@ -810,6 +1449,8 @@ def _load_model_for_inference(
         model_dtype = torch_mod.float32
 
     tokenizer = AutoTokenizer.from_pretrained(model_dir, trust_remote_code=True)
+    if tokenizer.pad_token_id is None and getattr(tokenizer, "eos_token_id", None) is not None:
+        tokenizer.pad_token_id = int(tokenizer.eos_token_id)
     model = AutoModelForCausalLM.from_pretrained(
         model_dir,
         dtype=model_dtype,
@@ -825,9 +1466,12 @@ def cmd_analyze_grammar(args: Dict[str, Any]) -> Dict[str, Any]:
     _set_deterministic_mode(ml["torch"], int(args.get("seed", 0)))
 
     ckpt_dir = _resolve_checkpoint_dir(args["checkpoint"])
+    grammar = _load_grammar_text(args)
     tokenizer = ml["AutoTokenizer"].from_pretrained(ckpt_dir, trust_remote_code=True)
     llg_tok = ml["llg"].hf.from_tokenizer(tokenizer)
-    g_spec = _parse_grammar_spec(ml["llg"], ml["outlines"], args["grammar"])
+    _, g_spec, grammar_meta = _parse_grammar_spec(
+        ml["llg"], ml["outlines"], grammar, llg_tok=llg_tok
+    )
     max_states = int(args.get("max_states", 64))
 
     states = _explore_grammar_states(
@@ -863,6 +1507,7 @@ def cmd_analyze_grammar(args: Dict[str, Any]) -> Dict[str, Any]:
         "ok": True,
         "operation": "analyze_grammar",
         "checkpoint_dir": ckpt_dir,
+        "grammar_format": grammar_meta,
         "vocab_size": int(llg_tok.vocab_size),
         "num_states_explored": len(states),
         "reachable_tokens_count": len(all_reachable_tokens),
@@ -876,8 +1521,7 @@ def cmd_verify_bundle(args: Dict[str, Any]) -> Dict[str, Any]:
     _set_deterministic_mode(ml["torch"], int(args.get("seed", 0)))
 
     bundle_dir = _resolve_checkpoint_dir(args["checkpoint"])
-    grammar = args["grammar"]
-    prompts = list(args.get("prompts") or _synthesize_default_prompts(grammar))
+    grammar = _load_grammar_text(args)
     system_prompt = args.get("system_prompt")
     tools = args.get("tools_json")
     few_shot_messages = args.get("few_shot_messages")
@@ -889,7 +1533,10 @@ def cmd_verify_bundle(args: Dict[str, Any]) -> Dict[str, Any]:
         ml, bundle_dir, device_pref
     )
     llg_tok = ml["llg"].hf.from_tokenizer(tokenizer)
-    g_spec = _parse_grammar_spec(ml["llg"], ml["outlines"], grammar)
+    effective_grammar, g_spec, grammar_meta = _parse_grammar_spec(
+        ml["llg"], ml["outlines"], grammar, llg_tok=llg_tok
+    )
+    prompts, prompts_source = _load_prompts(args, effective_grammar)
 
     details = []
     valid_count = 0
@@ -936,6 +1583,8 @@ def cmd_verify_bundle(args: Dict[str, Any]) -> Dict[str, Any]:
         "ok": True,
         "operation": "verify_bundle",
         "bundle_dir": bundle_dir,
+        "prompts_source": prompts_source,
+        "grammar_format": grammar_meta,
         "device": device,
         "dtype": str(model_dtype),
         "grammar_valid_count": valid_count,
@@ -962,14 +1611,21 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
     )
     os.makedirs(output_dir, exist_ok=True)
 
-    grammar = args["grammar"]
-    prompts = list(args.get("prompts") or _synthesize_default_prompts(grammar))
+    grammar = _load_grammar_text(args)
     system_prompt = args.get("system_prompt")
     tools = args.get("tools_json")
     few_shot_messages = args.get("few_shot_messages")
     use_chat_template = bool(args.get("use_chat_template", True))
     gate_inhibition_strength = float(args.get("gate_inhibition_strength", 15.0))
     steering_gain = float(args.get("steering_gain", 50.0))
+    eos_steering_gain = (
+        float(args["eos_steering_gain"])
+        if args.get("eos_steering_gain") is not None
+        else None
+    )
+    max_dense_inhibition_neurons = int(
+        args.get("max_dense_inhibition_neurons", 256)
+    )
     max_new_tokens = int(args.get("max_new_tokens", 64))
     max_states = int(args.get("max_states", 64))
     max_rounds = int(args.get("max_refinement_rounds", 2))
@@ -978,16 +1634,21 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
     t_start = time.perf_counter()
 
     # 1. Load model and validate CFG with Outlines + LLGuidance
-    tokenizer, model, device, model_dtype, has_fp8 = _load_model_for_inference(
+    tokenizer, model, device, model_dtype, _has_fp8 = _load_model_for_inference(
         ml, input_dir, device_pref
     )
     llg_tok = ml["llg"].hf.from_tokenizer(tokenizer)
-    g_spec = _parse_grammar_spec(ml["llg"], ml["outlines"], grammar)
+    effective_grammar, g_spec, grammar_meta = _parse_grammar_spec(
+        ml["llg"], ml["outlines"], grammar, llg_tok=llg_tok
+    )
+    prompts, prompts_source = _load_prompts(args, effective_grammar)
 
     # 2. Generate exact deterministic teacher trajectories via Outlines wrapper
     outlines_model = ml["outlines"].from_transformers(model, tokenizer)
     outlines_model.type_adapter.has_chat_template = False
-    generator = ml["outlines"].Generator(outlines_model, ml["outlines"].cfg(grammar))
+    generator = ml["outlines"].Generator(
+        outlines_model, ml["outlines"].cfg(effective_grammar)
+    )
 
     formatted_prompts = [
         _build_formatted_prompt(
@@ -998,72 +1659,123 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
 
     eos_id = getattr(tokenizer, "eos_token_id", None)
     teacher_outputs: List[str] = []
-    teacher_token_seqs: List[List[int]] = []
+    teacher_valid_flags: List[bool] = []
+    skipped_teacher_indices: List[int] = []
+    valid_formatted_prompts: List[str] = []
+    valid_teacher_token_seqs: List[List[int]] = []
     teacher_prefixes: List[Tuple[int, ...]] = []
 
-    for fmt in formatted_prompts:
-        out_text = str(
-            generator(fmt, max_new_tokens=max_new_tokens, do_sample=False)
-        ).strip()
-        teacher_outputs.append(out_text)
-        t_ids = [int(t) for t in tokenizer.encode(out_text, add_special_tokens=False)]
-        for k in range(len(t_ids) + 1):
-            teacher_prefixes.append(tuple(t_ids[:k]))
+    for p_idx, fmt in enumerate(formatted_prompts):
+        raw_out = str(generator(fmt, max_new_tokens=max_new_tokens, do_sample=False))
+        stripped_out = raw_out.strip()
+        chosen_text: Optional[str] = None
+        chosen_ids: List[int] = []
+
+        if stripped_out:
+            cand_ids = [
+                int(t) for t in tokenizer.encode(stripped_out, add_special_tokens=False)
+            ]
+            if cand_ids and _is_grammar_accepted(
+                ml["llg"], llg_tok, g_spec, tokenizer, stripped_out, cand_ids
+            ):
+                chosen_text = stripped_out
+                chosen_ids = cand_ids
+            elif raw_out != stripped_out:
+                raw_ids = [
+                    int(t) for t in tokenizer.encode(raw_out, add_special_tokens=False)
+                ]
+                if raw_ids and _is_grammar_accepted(
+                    ml["llg"], llg_tok, g_spec, tokenizer, raw_out, raw_ids
+                ):
+                    chosen_text = raw_out
+                    chosen_ids = raw_ids
+
+        if chosen_text is None:
+            teacher_outputs.append(stripped_out)
+            teacher_valid_flags.append(False)
+            skipped_teacher_indices.append(p_idx)
+            continue
+
+        teacher_outputs.append(chosen_text)
+        teacher_valid_flags.append(True)
+        for k in range(len(chosen_ids) + 1):
+            teacher_prefixes.append(tuple(chosen_ids[:k]))
+        t_ids = list(chosen_ids)
         if eos_id is not None:
             t_ids.append(int(eos_id))
-        teacher_token_seqs.append(t_ids)
+        valid_formatted_prompts.append(fmt)
+        valid_teacher_token_seqs.append(t_ids)
 
     del generator, outlines_model
 
-    # 3. Discover final layer & load raw safetensors preserving exact original storage dtypes
+    # 3. Discover final layer & load only required tensors via safe_open (low-RAM sharded support)
     st_shards, _ = _find_safetensors_files(input_dir, [])
-    all_raw_tensors: Dict[str, Any] = {}
+    all_tensor_names: List[str] = []
     shard_of_key: Dict[str, str] = {}
     for sf in st_shards:
-        loaded = ml["load_file"](sf)
-        for k, v in loaded.items():
-            all_raw_tensors[k] = v
-            shard_of_key[k] = sf
+        with ml["safe_open"](sf, framework="pt", device="cpu") as f_st:
+            for k in f_st.keys():
+                all_tensor_names.append(k)
+                shard_of_key[k] = sf
 
-    spec = _discover_final_layer_spec(model, list(all_raw_tensors.keys()))
+    spec = _discover_final_layer_spec(model, all_tensor_names)
     mlp_tensors = spec["mlp_tensors"]
     target_keys = [v for v in mlp_tensors.values() if v is not None]
 
-    raw_dtypes = {k: all_raw_tensors[k].dtype for k in target_keys}
+    needed_keys: Set[str] = set(target_keys)
+    if spec["unembed_name"] in shard_of_key:
+        needed_keys.add(spec["unembed_name"])
+    if spec["norm_name"] and spec["norm_name"] in shard_of_key:
+        needed_keys.add(spec["norm_name"])
+
+    partial_raw_tensors: Dict[str, Any] = {}
+    shards_to_read: Dict[str, List[str]] = {}
+    for k in needed_keys:
+        if k in shard_of_key:
+            shards_to_read.setdefault(shard_of_key[k], []).append(k)
+    for sf, keys_in_sf in shards_to_read.items():
+        with ml["safe_open"](sf, framework="pt", device="cpu") as f_st:
+            for k in keys_in_sf:
+                partial_raw_tensors[k] = f_st.get_tensor(k)
+
+    raw_dtypes = {k: partial_raw_tensors[k].dtype for k in target_keys}
     base_weights_f32 = {
-        k: all_raw_tensors[k].float().cpu().clone() for k in target_keys
+        k: partial_raw_tensors[k].float().cpu().clone() for k in target_keys
     }
     working_weights_f32 = {k: base_weights_f32[k].clone() for k in target_keys}
 
     embed_w, gamma, get_clean_dir = _build_clean_unembed_helper(
-        torch_mod, all_raw_tensors, spec, model
+        torch_mod, partial_raw_tensors, spec, model
     )
     d_model = int(embed_w.shape[1])
-    del all_raw_tensors
+    del partial_raw_tensors
 
-    # 4. Mechanism A: Sparse SwiGLU Grammar-State Gate Inhibition (prompt-invariant)
+    # 4. Mechanism A: SwiGLU Grammar-State Gate Inhibition (sparse or bounded dense slice)
     mech_a_report: Dict[str, Any] = {
         "applied": False,
         "reason": "Not applicable to non-SwiGLU MLP.",
     }
+    mech_a_reserved: Set[int] = set()
     if spec["mlp_type"] == "swiglu" and gate_inhibition_strength > 0:
-        mech_a_report = _apply_swiglu_grammar_gate_inhibition(
+        mech_a_report, mech_a_reserved = _apply_swiglu_grammar_gate_inhibition(
             ml=ml,
             model=model,
             tokenizer=tokenizer,
             llg_tok=llg_tok,
             g_spec=g_spec,
-            grammar=grammar,
+            grammar=effective_grammar,
             spec=spec,
             embed_w=embed_w,
             gamma=gamma,
             gate_w=working_weights_f32[mlp_tensors["gate"]],
+            up_w=working_weights_f32[mlp_tensors["up"]],
             down_w=working_weights_f32[mlp_tensors["down"]],
-            anchor_prompts=formatted_prompts,
+            anchor_prompts=valid_formatted_prompts or formatted_prompts,
             gate_inhibition_strength=gate_inhibition_strength,
             max_states=max_states,
             device=device,
             extra_prefixes=teacher_prefixes,
+            max_dense_neurons=max_dense_inhibition_neurons,
         )
         # Push Mechanism A gate updates (quantized to target storage dtype) into live model
         if mech_a_report.get("applied"):
@@ -1079,28 +1791,35 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
         ml=ml,
         model=model,
         tokenizer=tokenizer,
+        llg_tok=llg_tok,
+        g_spec=g_spec,
         spec=spec,
         get_clean_dir=get_clean_dir,
         d_model=d_model,
         raw_dtypes=raw_dtypes,
         orig_weights=working_weights_f32,
-        formatted_prompts=formatted_prompts,
-        teacher_token_seqs=teacher_token_seqs,
+        formatted_prompts=valid_formatted_prompts,
+        teacher_token_seqs=valid_teacher_token_seqs,
         steering_gain=steering_gain,
         max_rounds=max_rounds,
         device=device,
         model_dtype=model_dtype,
+        eos_steering_gain=eos_steering_gain,
+        reserved_neurons=mech_a_reserved,
     )
 
+    # Free live model before loading modified safetensors shard(s) to minimize peak RAM
+    del model, embed_w, gamma, get_clean_dir
+    gc.collect()
+    if device == "mps" and hasattr(torch_mod, "mps"):
+        torch_mod.mps.empty_cache()
+    elif device == "cuda" and torch_mod.cuda.is_available():
+        torch_mod.cuda.empty_cache()
+
     # 6. Export clean Hugging Face bundle preserving original dtypes (0-byte overhead)
-    edited_shards: Dict[str, Dict[str, Any]] = {}
+    modified_shard_keys: Dict[str, List[str]] = {}
     for k in target_keys:
-        sf = shard_of_key[k]
-        if sf not in edited_shards:
-            edited_shards[sf] = ml["load_file"](sf)
-        edited_shards[sf][k] = _clamp_for_dtype(
-            torch_mod, edited_weights_f32[k], raw_dtypes[k]
-        )
+        modified_shard_keys.setdefault(shard_of_key[k], []).append(k)
 
     from prelude import read_safetensors_header
 
@@ -1108,10 +1827,17 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
     output_st_paths: List[str] = []
     for sf in st_shards:
         dst_sf = os.path.join(output_dir, os.path.basename(sf))
-        if sf in edited_shards:
+        if sf in modified_shard_keys:
+            shard_tensors = ml["load_file"](sf)
+            for k in modified_shard_keys[sf]:
+                shard_tensors[k] = _clamp_for_dtype(
+                    torch_mod, edited_weights_f32[k], raw_dtypes[k]
+                )
             orig_hdr, _ = read_safetensors_header(sf)
             orig_meta = orig_hdr.get("__metadata__")
-            ml["save_file"](edited_shards[sf], dst_sf, metadata=orig_meta)
+            ml["save_file"](shard_tensors, dst_sf, metadata=orig_meta)
+            del shard_tensors
+            gc.collect()
         elif os.path.abspath(sf) != os.path.abspath(dst_sf):
             shutil.copy2(sf, dst_sf)
         output_st_paths.append(dst_sf)
@@ -1142,11 +1868,10 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
     manifest = build_edit_manifest(manifest_base, manifest_edited, output_dir)
 
     # 7. Reload exported bundle with standard unwrapped AutoModelForCausalLM and verify
-    del model
     verify_res = cmd_verify_bundle(
         {
             "checkpoint": output_dir,
-            "grammar": grammar,
+            "grammar": effective_grammar,
             "prompts": prompts,
             "system_prompt": system_prompt,
             "tools_json": tools,
@@ -1159,12 +1884,18 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     teacher_matches = 0
-    for detail, t_out in zip(verify_res["details"], teacher_outputs, strict=True):
-        matched = detail["raw_output"] == t_out
+    valid_teacher_matches = 0
+    valid_teacher_count = sum(1 for v in teacher_valid_flags if v)
+    for detail, t_out, t_valid in zip(
+        verify_res["details"], teacher_outputs, teacher_valid_flags, strict=True
+    ):
+        matched = bool(t_valid and detail["raw_output"] == t_out.strip())
         detail["outlines_teacher_output"] = t_out
+        detail["outlines_teacher_valid"] = t_valid
         detail["matches_outlines_teacher"] = matched
         if matched:
             teacher_matches += 1
+            valid_teacher_matches += 1
 
     primary_model_path = (
         os.path.join(output_dir, "model.safetensors")
@@ -1178,6 +1909,8 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
         "input_dir": input_dir,
         "output_dir": output_dir,
         "primary_model_path": primary_model_path,
+        "prompts_source": prompts_source,
+        "grammar_format": grammar_meta,
         "final_layer_index": spec["layer_index"],
         "mlp_type": spec["mlp_type"],
         "tensors_modified": target_keys,
@@ -1192,6 +1925,12 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
                 else 0.0,
                 6,
             ),
+        },
+        "teacher_trajectories": {
+            "total": len(prompts),
+            "valid_compiled": valid_teacher_count,
+            "skipped_invalid": len(skipped_teacher_indices),
+            "skipped_indices": skipped_teacher_indices,
         },
         "mechanism_a_gate_inhibition": mech_a_report,
         "mechanism_b_teacher_steering": mech_b_report,
@@ -1209,6 +1948,11 @@ def cmd_compile(args: Dict[str, Any]) -> Dict[str, Any]:
             "teacher_exact_match_count": teacher_matches,
             "teacher_exact_match_rate": round(teacher_matches / len(prompts), 4)
             if prompts
+            else 0.0,
+            "valid_teacher_exact_match_rate": round(
+                valid_teacher_matches / valid_teacher_count, 4
+            )
+            if valid_teacher_count
             else 0.0,
             "details": verify_res["details"],
         },
@@ -1262,6 +2006,11 @@ def main() -> None:
         help="JSON list or file path of calibration prompts.",
     )
     parser.add_argument(
+        "--prompts-file",
+        default=None,
+        help="Path to a JSON/JSONL/text file of calibration prompts.",
+    )
+    parser.add_argument(
         "--system-prompt",
         default=None,
         help="Optional system prompt for chat formatting.",
@@ -1270,16 +2019,24 @@ def main() -> None:
     parser.add_argument("--gate-inhibition-strength", type=float, default=15.0)
     parser.add_argument("--steering-gain", type=float, default=50.0)
     parser.add_argument(
+        "--eos-steering-gain",
+        type=float,
+        default=None,
+        help="Optional separate down-projection gain for accepting-state EOS steering neurons (defaults to --steering-gain).",
+    )
+    parser.add_argument(
+        "--max-dense-inhibition-neurons",
+        type=int,
+        default=256,
+        help="Max final-layer SwiGLU neurons eligible for dense Mechanism A gate inhibition (capped at 5%% of MLP width; 0 disables dense gating).",
+    )
+    parser.add_argument(
         "--device", default="auto", choices=["auto", "cpu", "mps", "cuda"]
     )
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    grammar_text = args.grammar
-    if args.grammar_file:
-        with open(args.grammar_file, "r", encoding="utf-8") as f:
-            grammar_text = f.read()
-    if not grammar_text:
+    if not args.grammar and not args.grammar_file:
         parser.error("Either --grammar or --grammar-file is required.")
 
     prompts = None
@@ -1295,12 +2052,16 @@ def main() -> None:
             "operation": args.operation,
             "checkpoint": args.checkpoint,
             "output_dir": args.output_dir,
-            "grammar": grammar_text,
+            "grammar": args.grammar,
+            "grammar_file": args.grammar_file,
             "prompts": prompts,
+            "prompts_file": args.prompts_file,
             "system_prompt": args.system_prompt,
             "max_new_tokens": args.max_new_tokens,
             "gate_inhibition_strength": args.gate_inhibition_strength,
             "steering_gain": args.steering_gain,
+            "eos_steering_gain": args.eos_steering_gain,
+            "max_dense_inhibition_neurons": args.max_dense_inhibition_neurons,
             "device": args.device,
             "seed": args.seed,
         }

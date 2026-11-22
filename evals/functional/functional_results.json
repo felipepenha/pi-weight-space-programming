@@ -171,7 +171,8 @@
       "guard_blocked_backward": true,
       "guard_violation": "Calling .backward() (gradient computation is forbidden in Weight-Space Programming)",
       "static_isolation_verified": true,
-      "runtime_filesystem_shield_verified": true
+      "runtime_filesystem_shield_verified": true,
+      "nested_3level_isolation_verified": true
     },
     "wsp_hf_download": {
       "passed": true,
@@ -187,7 +188,35 @@
       "size_delta_bytes": 0,
       "grammar_compliance_rate": 1.0,
       "teacher_exact_match_rate": 1.0,
-      "changed_entries_total": 2304
+      "changed_entries_total": 2304,
+      "sql_2016_sharded": {
+        "states_explored": 5,
+        "grammar_format": {
+          "format": "w3c_ebnf_to_lark",
+          "converted_from": "w3c_ebnf",
+          "entry_rule": "direct_SQL_statement",
+          "total_rules": 6,
+          "inlined_literals": 1,
+          "reachable_rules": 5
+        },
+        "size_delta_bytes": 0,
+        "grammar_compliance_rate": 1.0,
+        "teacher_exact_match_rate": 1.0,
+        "untouched_shard_identical": true,
+        "tokenizer_model_copied": true
+      },
+      "json_dense_and_eos_guard": {
+        "dense_mech_a_mode": "dense_top_impact_slice",
+        "dense_mech_a_capacity_fraction": 0.0469,
+        "gated_neuron_state_pairs": 57,
+        "eos_intervened_states": 3,
+        "eos_neurons_allocated": 1,
+        "eos_non_accepting_guard_states": 24,
+        "eos_steering_pooled": true,
+        "max_non_accepting_eos_activation": -0.002232,
+        "min_accepting_eos_activation": 99.8493,
+        "truncated_teacher_skipped_invalid": 3
+      }
     }
   },
   "all_passed": true

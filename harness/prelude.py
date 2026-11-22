@@ -84,7 +84,7 @@ def _install_filesystem_shield():
 
     experiments_parent_real = None
     _curr = os.path.dirname(workspace_real)
-    for _ in range(2):
+    for _ in range(4):
         if os.path.basename(_curr) in ("experiments", "examples"):
             experiments_parent_real = _curr
             break
@@ -102,6 +102,12 @@ def _install_filesystem_shield():
         "explanations.md",
         "final_answer.md",
         "README.md",
+        "run.sh",
+        "edit.sh",
+        "eval.sh",
+        "install-extension.sh",
+        "pyproject.toml",
+        "uv.lock",
         "prompt_model.py",
         "test_functional.py",
         "run_paper_evals.py",
@@ -156,6 +162,25 @@ def _install_filesystem_shield():
         real_p = _norm(os.path.realpath(abs_p))
         return _check_single_blocked(abs_p) or _check_single_blocked(real_p)
 
+    def _is_hidden_venv_dir(p) -> bool:
+        if allow_eval_access or p is None or isinstance(p, int):
+            return False
+        try:
+            raw = os.fsdecode(os.fspath(p))
+        except TypeError:
+            return False
+        if not raw:
+            return False
+        abs_p = _norm(os.path.abspath(raw))
+        real_p = _norm(os.path.realpath(abs_p))
+        return any(
+            cand.endswith("/.venv") or cand.endswith("/.venv/bin")
+            for cand in (abs_p, real_p)
+        )
+
+    def _is_hidden_listing_path(p) -> bool:
+        return _is_blocked_path(p) or _is_hidden_venv_dir(p)
+
     allowed_write_roots = []
     for cand in (
         work_real,
@@ -202,7 +227,7 @@ def _install_filesystem_shield():
         if path is None:
             path_str = "."
         elif isinstance(path, (str, bytes, os.PathLike)):
-            if _is_blocked_path(path):
+            if _is_hidden_listing_path(path):
                 raise PermissionError(
                     f"[Errno 13] Permission denied: '{path}' (Protected harness/evaluation path)"
                 )
@@ -216,11 +241,11 @@ def _install_filesystem_shield():
         return [
             e
             for e in entries
-            if not _is_blocked_path(os.path.join(path_str, os.fsdecode(e)))
+            if not _is_hidden_listing_path(os.path.join(path_str, os.fsdecode(e)))
         ]
 
     def _safe_walk(top, *args, **kwargs):
-        if isinstance(top, (str, bytes, os.PathLike)) and _is_blocked_path(top):
+        if isinstance(top, (str, bytes, os.PathLike)) and _is_hidden_listing_path(top):
             return
         for root, dirs, files in _orig_walk(top, *args, **kwargs):
             if allow_eval_access:
@@ -230,12 +255,12 @@ def _install_filesystem_shield():
                 dirs[:] = [
                     d
                     for d in dirs
-                    if not _is_blocked_path(os.path.join(root_str, os.fsdecode(d)))
+                    if not _is_hidden_listing_path(os.path.join(root_str, os.fsdecode(d)))
                 ]
                 safe_files = [
                     f
                     for f in files
-                    if not _is_blocked_path(os.path.join(root_str, os.fsdecode(f)))
+                    if not _is_hidden_listing_path(os.path.join(root_str, os.fsdecode(f)))
                 ]
                 yield root, dirs, safe_files
 
@@ -250,7 +275,7 @@ def _install_filesystem_shield():
         def __next__(self):
             while True:
                 entry = next(self._it)
-                if not allow_eval_access and _is_blocked_path(entry.path):
+                if not allow_eval_access and _is_hidden_listing_path(entry.path):
                     continue
                 return entry
 
@@ -267,7 +292,7 @@ def _install_filesystem_shield():
         if (
             path is not None
             and isinstance(path, (str, bytes, os.PathLike))
-            and _is_blocked_path(path)
+            and _is_hidden_listing_path(path)
         ):
             raise PermissionError(
                 f"[Errno 13] Permission denied: '{path}' (Protected harness/evaluation path)"
@@ -449,6 +474,8 @@ class Checkpoint:
         self.info = {}
         self._kind = None
         self._raw = None
+        self._shard_raws = {}
+        self._tensor_shard = {}
         self._npz = None
 
         if os.path.isdir(target):
@@ -457,20 +484,47 @@ class Checkpoint:
                 with open(cfg_path, "r", encoding="utf-8") as f:
                     self.config = json.load(f)
             st_path = os.path.join(target, "model.safetensors")
+            index_path = os.path.join(target, "model.safetensors.index.json")
             if os.path.exists(st_path):
                 self._init_safetensors(st_path)
             else:
-                # Directory of .npy files
-                self._kind = "npy_dir"
-                for fname in sorted(os.listdir(target)):
-                    if fname.endswith(".npy"):
-                        name = fname[:-4]
-                        arr = np.load(os.path.join(target, fname), mmap_mode="r")
-                        self.info[name] = {
-                            "dtype": str(arr.dtype),
-                            "shape": list(arr.shape),
-                            "path": os.path.join(target, fname),
-                        }
+                shard_paths = []
+                if os.path.exists(index_path):
+                    with open(index_path, "r", encoding="utf-8") as f:
+                        idx_data = json.load(f)
+                    weight_map = idx_data.get("weight_map")
+                    if isinstance(weight_map, dict) and weight_map:
+                        shard_paths = [
+                            os.path.join(target, fname)
+                            for fname in sorted(set(weight_map.values()))
+                        ]
+                        for sp in shard_paths:
+                            if not os.path.isfile(sp):
+                                raise FileNotFoundError(
+                                    f"Missing safetensors shard referenced in index: {sp}"
+                                )
+                if not shard_paths:
+                    shard_paths = [
+                        os.path.join(target, fname)
+                        for fname in sorted(os.listdir(target))
+                        if fname.endswith(".safetensors")
+                    ]
+                if len(shard_paths) == 1:
+                    self._init_safetensors(shard_paths[0])
+                elif len(shard_paths) > 1:
+                    self._init_safetensors_sharded(shard_paths)
+                else:
+                    # Directory of .npy files
+                    self._kind = "npy_dir"
+                    for fname in sorted(os.listdir(target)):
+                        if fname.endswith(".npy"):
+                            name = fname[:-4]
+                            arr = np.load(os.path.join(target, fname), mmap_mode="r")
+                            self.info[name] = {
+                                "dtype": str(arr.dtype),
+                                "shape": list(arr.shape),
+                                "path": os.path.join(target, fname),
+                            }
         elif target.endswith(".safetensors"):
             self._init_safetensors(target)
         elif target.endswith(".npz"):
@@ -499,7 +553,61 @@ class Checkpoint:
         header, offset = read_safetensors_header(st_path)
         self.metadata = header.pop("__metadata__", None)
         self.info = header
-        self._raw = np.memmap(st_path, dtype=np.uint8, mode="r", offset=offset)
+        self._raw = (
+            np.memmap(st_path, dtype=np.uint8, mode="r", offset=offset)
+            if os.path.getsize(st_path) > offset
+            else np.empty(0, dtype=np.uint8)
+        )
+
+    def _init_safetensors_sharded(self, shard_paths):
+        """Index multiple safetensors shards lazily via read-only memory maps."""
+        self._kind = "safetensors_sharded"
+        self._shard_raws = {}
+        self._tensor_shard = {}
+        for sp in shard_paths:
+            header, offset = read_safetensors_header(sp)
+            meta = header.pop("__metadata__", None)
+            if self.metadata is None and meta is not None:
+                self.metadata = meta
+            self._shard_raws[sp] = (
+                np.memmap(sp, dtype=np.uint8, mode="r", offset=offset)
+                if os.path.getsize(sp) > offset
+                else np.empty(0, dtype=np.uint8)
+            )
+            for k, v in header.items():
+                self.info[k] = v
+                self._tensor_shard[k] = sp
+
+    @staticmethod
+    def _decode_safetensors_bytes(raw: np.ndarray, meta: dict) -> np.ndarray:
+        """Decode raw little-endian safetensors byte slice into float32 numpy array."""
+        dt = meta["dtype"]
+        if dt == "BF16":
+            x = bf16_to_f32(raw.view(np.uint16))
+        elif dt == "F8_E4M3":
+            x = f8_e4m3_to_f32(raw.view(np.uint8))
+        elif dt == "F16":
+            x = raw.view(np.float16).astype(np.float32)
+        elif dt == "F32":
+            x = raw.view(np.float32).copy()
+        elif dt == "F64":
+            x = raw.view(np.float64).astype(np.float32)
+        else:
+            x = raw.view(DT[dt]).astype(np.float32)
+        return x.reshape(meta["shape"]).copy()
+
+    def raw_view(self, name: str):
+        """Return read-only uint8 memmap slice for safetensors checkpoints, else None."""
+        if name not in self.info:
+            raise KeyError(f"Unknown tensor {name!r}. Available: {self.keys()[:20]}")
+        meta = self.info[name]
+        if self._kind == "safetensors":
+            a, b = meta["data_offsets"]
+            return self._raw[a:b]
+        if self._kind == "safetensors_sharded":
+            a, b = meta["data_offsets"]
+            return self._shard_raws[self._tensor_shard[name]][a:b]
+        return None
 
     def keys(self):
         return sorted(self.info.keys())
@@ -515,23 +623,8 @@ class Checkpoint:
         if name not in self.info:
             raise KeyError(f"Unknown tensor {name!r}. Available: {self.keys()[:20]}")
         meta = self.info[name]
-        if self._kind == "safetensors":
-            a, b = meta["data_offsets"]
-            raw = self._raw[a:b]
-            dt = meta["dtype"]
-            if dt == "BF16":
-                x = bf16_to_f32(raw.view(np.uint16))
-            elif dt == "F8_E4M3":
-                x = f8_e4m3_to_f32(raw.view(np.uint8))
-            elif dt == "F16":
-                x = raw.view(np.float16).astype(np.float32)
-            elif dt == "F32":
-                x = raw.view(np.float32).copy()
-            elif dt == "F64":
-                x = raw.view(np.float64).astype(np.float32)
-            else:
-                x = raw.view(DT[dt]).astype(np.float32)
-            return x.reshape(meta["shape"]).copy()
+        if self._kind in ("safetensors", "safetensors_sharded"):
+            return self._decode_safetensors_bytes(self.raw_view(name), meta)
         elif self._kind == "npz":
             return np.asarray(self._npz[name], dtype=np.float32).copy()
         elif self._kind in ("npy", "npy_dir"):
