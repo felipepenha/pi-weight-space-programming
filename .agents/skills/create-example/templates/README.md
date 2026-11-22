@@ -103,7 +103,16 @@ uv sync
 
 ```bash
 cd experiments/{{EXAMPLE_NAME}}/{{OPEN_WEIGHT_MODEL_NAME}}
+
+# Run both Pi WSP editing (./edit.sh) and out-of-harness evaluation (./eval.sh) sequentially
 ./run.sh
+
+# Run only the Pi WSP weight-editing stage into models/output/
+./edit.sh
+
+# Run only out-of-harness evaluation against existing weights
+./eval.sh
+# (equivalent to ./run.sh --eval-only)
 ```
 
 ### 4. Interactive Execution with Pi Coding Agent
