@@ -1,0 +1,398 @@
+{
+  "benchmark": "llmsql-2.0",
+  "sampled_questions": 200,
+  "prompt_style": "raw-sql",
+  "seed": 42,
+  "models": [
+    {
+      "label": "CodeLlama-7b-hf (Baseline, Unwrapped)",
+      "run_dir": "baseline",
+      "mode": "unwrapped",
+      "total_questions": 200,
+      "execution_accuracy": 0.035,
+      "sqlite_executable_rate": 0.82,
+      "mean_sql_component_f1": 0.3778,
+      "raw_cfg_compliance_rate": 0.16,
+      "mean_raw_cfg_prefix_ratio": 0.4454,
+      "extracted_sql_cfg_compliance_rate": 0.535,
+      "mean_latency_ms": 11743.6,
+      "speedup_vs_outlines": 1.0816,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.5111,
+        "functions_f1": 0.1739,
+        "identifiers_f1": 0.4325,
+        "select_f1": 0.4948,
+        "where_f1": 0.2839
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 1,
+          "accuracy": 0.0152
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 6,
+          "accuracy": 0.0896
+        }
+      }
+    },
+    {
+      "label": "CodeLlama-7b-hf (Baseline + Outlines)",
+      "run_dir": "baseline",
+      "mode": "outlines",
+      "total_questions": 200,
+      "execution_accuracy": 0.03,
+      "sqlite_executable_rate": 0.795,
+      "mean_sql_component_f1": 0.3736,
+      "raw_cfg_compliance_rate": 0.53,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_rate": 0.685,
+      "mean_latency_ms": 12701.8,
+      "speedup_vs_outlines": 1.0,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4987,
+        "functions_f1": 0.1459,
+        "identifiers_f1": 0.4265,
+        "select_f1": 0.4948,
+        "where_f1": 0.3028
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 1,
+          "accuracy": 0.0152
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 5,
+          "accuracy": 0.0746
+        }
+      }
+    },
+    {
+      "label": "CodeLlama-7b-hf (Weight-Compiled [deepseek-v4.1-flash], Unwrapped)",
+      "run_dir": "output-deepseek-v4.1-flash-1017",
+      "mode": "unwrapped",
+      "total_questions": 200,
+      "execution_accuracy": 0.02,
+      "sqlite_executable_rate": 0.705,
+      "mean_sql_component_f1": 0.3616,
+      "raw_cfg_compliance_rate": 0.57,
+      "mean_raw_cfg_prefix_ratio": 0.7585,
+      "extracted_sql_cfg_compliance_rate": 0.59,
+      "mean_latency_ms": 6527.8,
+      "speedup_vs_outlines": 1.9458,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4706,
+        "functions_f1": 0.1757,
+        "identifiers_f1": 0.4178,
+        "select_f1": 0.5048,
+        "where_f1": 0.2923
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 4,
+          "accuracy": 0.0597
+        }
+      }
+    },
+    {
+      "label": "CodeLlama-7b-hf (Weight-Compiled [deepseek-v4.1-flash] + Outlines)",
+      "run_dir": "output-deepseek-v4.1-flash-1017",
+      "mode": "outlines",
+      "total_questions": 200,
+      "execution_accuracy": 0.015,
+      "sqlite_executable_rate": 0.73,
+      "mean_sql_component_f1": 0.3694,
+      "raw_cfg_compliance_rate": 0.58,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_rate": 0.725,
+      "mean_latency_ms": 7788.7,
+      "speedup_vs_outlines": 1.6308,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4907,
+        "functions_f1": 0.1491,
+        "identifiers_f1": 0.4219,
+        "select_f1": 0.5048,
+        "where_f1": 0.3034
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 3,
+          "accuracy": 0.0448
+        }
+      }
+    },
+    {
+      "label": "CodeLlama-7b-hf (Weight-Compiled [deepseek-v4-pro], Unwrapped)",
+      "run_dir": "output-deepseek-v4-pro-0813",
+      "mode": "unwrapped",
+      "total_questions": 200,
+      "execution_accuracy": 0.02,
+      "sqlite_executable_rate": 0.615,
+      "mean_sql_component_f1": 0.3356,
+      "raw_cfg_compliance_rate": 0.375,
+      "mean_raw_cfg_prefix_ratio": 0.7493,
+      "extracted_sql_cfg_compliance_rate": 0.48,
+      "mean_latency_ms": 6438.4,
+      "speedup_vs_outlines": 1.9728,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4788,
+        "functions_f1": 0.1023,
+        "identifiers_f1": 0.3692,
+        "select_f1": 0.4548,
+        "where_f1": 0.2479
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 4,
+          "accuracy": 0.0597
+        }
+      }
+    },
+    {
+      "label": "CodeLlama-7b-hf (Weight-Compiled [deepseek-v4-pro] + Outlines)",
+      "run_dir": "output-deepseek-v4-pro-0813",
+      "mode": "outlines",
+      "total_questions": 200,
+      "execution_accuracy": 0.02,
+      "sqlite_executable_rate": 0.515,
+      "mean_sql_component_f1": 0.3146,
+      "raw_cfg_compliance_rate": 0.395,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_rate": 0.59,
+      "mean_latency_ms": 9306.7,
+      "speedup_vs_outlines": 1.3648,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4418,
+        "functions_f1": 0.0763,
+        "identifiers_f1": 0.3484,
+        "select_f1": 0.4548,
+        "where_f1": 0.2553
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 4,
+          "accuracy": 0.0597
+        }
+      }
+    },
+    {
+      "label": "defog/sqlcoder-7b-2 (Fine-Tuned Ref., Unwrapped)",
+      "run_dir": "reference-sqlcoder-7b-2",
+      "mode": "unwrapped",
+      "total_questions": 200,
+      "execution_accuracy": 0.02,
+      "sqlite_executable_rate": 0.465,
+      "mean_sql_component_f1": 0.3777,
+      "raw_cfg_compliance_rate": 0.44,
+      "mean_raw_cfg_prefix_ratio": 0.7619,
+      "extracted_sql_cfg_compliance_rate": 0.44,
+      "mean_latency_ms": 4684.7,
+      "speedup_vs_outlines": 2.7113,
+      "safetensors_delta_vs_input_bytes": null,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.5388,
+        "functions_f1": 0.1799,
+        "identifiers_f1": 0.4294,
+        "select_f1": 0.4212,
+        "where_f1": 0.2732
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 4,
+          "accuracy": 0.0597
+        }
+      }
+    },
+    {
+      "label": "defog/sqlcoder-7b-2 (Fine-Tuned Ref. + Outlines)",
+      "run_dir": "reference-sqlcoder-7b-2",
+      "mode": "outlines",
+      "total_questions": 200,
+      "execution_accuracy": 0.02,
+      "sqlite_executable_rate": 0.465,
+      "mean_sql_component_f1": 0.3603,
+      "raw_cfg_compliance_rate": 0.96,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_rate": 0.965,
+      "mean_latency_ms": 4995.5,
+      "speedup_vs_outlines": 2.5426,
+      "safetensors_delta_vs_input_bytes": null,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.5478,
+        "functions_f1": 0.1393,
+        "identifiers_f1": 0.4086,
+        "select_f1": 0.4212,
+        "where_f1": 0.2582
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 4,
+          "accuracy": 0.0597
+        }
+      }
+    },
+    {
+      "label": "Qwen/Qwen2.5-Coder-0.5B-Instruct (Small Ref., Unwrapped)",
+      "run_dir": "reference-qwen2.5-coder-0.5b-instruct",
+      "mode": "unwrapped",
+      "total_questions": 200,
+      "execution_accuracy": 0.0,
+      "sqlite_executable_rate": 0.07,
+      "mean_sql_component_f1": 0.1941,
+      "raw_cfg_compliance_rate": 0.005,
+      "mean_raw_cfg_prefix_ratio": 0.0356,
+      "extracted_sql_cfg_compliance_rate": 0.065,
+      "mean_latency_ms": 872.1,
+      "speedup_vs_outlines": 14.5646,
+      "safetensors_delta_vs_input_bytes": null,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.3937,
+        "functions_f1": 0.1177,
+        "identifiers_f1": 0.0533,
+        "select_f1": 0.175,
+        "where_f1": 0.1476
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        }
+      }
+    },
+    {
+      "label": "Qwen/Qwen2.5-Coder-0.5B-Instruct (Small Ref. + Outlines)",
+      "run_dir": "reference-qwen2.5-coder-0.5b-instruct",
+      "mode": "outlines",
+      "total_questions": 200,
+      "execution_accuracy": 0.035,
+      "sqlite_executable_rate": 0.34,
+      "mean_sql_component_f1": 0.2507,
+      "raw_cfg_compliance_rate": 0.575,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_rate": 0.6,
+      "mean_latency_ms": 993.4,
+      "speedup_vs_outlines": 12.7862,
+      "safetensors_delta_vs_input_bytes": null,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4162,
+        "functions_f1": 0.113,
+        "identifiers_f1": 0.2247,
+        "select_f1": 0.2,
+        "where_f1": 0.2357
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 2,
+          "accuracy": 0.0299
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 5,
+          "accuracy": 0.0746
+        }
+      }
+    }
+  ]
+}

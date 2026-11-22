@@ -1,0 +1,74 @@
+
+############################################################################
+🧪 Evaluating [UNWRAPPED] on defog/sqlcoder-7b-2 (mps, torch.float16)
+############################################################################
+✅ Model loaded in 9.40s.
+  [1/200] qid=8 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (5493.1ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [2/200] qid=13 raw_cfg=False (pfx=0.09) ext_cfg=False comp_f1=0.08 (5667.0ms) -> "SELECT (MAX(EXTRACT(epoch FROM to_timestamp(o.date, 'DD MMM YYYY'))) - MIN(EXTRACT(epoch F"
+  [3/200] qid=16 raw_cfg=False (pfx=0.15) ext_cfg=False comp_f1=0.33 (4495.4ms) -> "SELECT SUM(CASE WHEN g.result ilike '%W%' THEN 41 ELSE 0 END) + SUM(CASE WHEN g.result ili"
+  [10/200] qid=138 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3350.1ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [20/200] qid=200 raw_cfg=False (pfx=0.85) ext_cfg=False comp_f1=0.58 (4653.4ms) -> 'SELECT "1-17594659-1"."Competition" FROM "1-17594659-1" WHERE "1-17594659-1"."Opposition" '
+  [30/200] qid=279 raw_cfg=False (pfx=0.95) ext_cfg=False comp_f1=0.43 (5168.7ms) -> 'SELECT "Opponent", SUM(CASE WHEN "Result" = \'W\' THEN 6 ELSE 3 END) AS points_scored FROM "'
+  [40/200] qid=369 raw_cfg=False (pfx=0.88) ext_cfg=False comp_f1=0.27 (2894.3ms) -> 'SELECT "Opponent" FROM "1-11326124-3" ORDER BY "Date" DESC LIMIT 1;'
+  [50/200] qid=435 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3326.3ms) -> 'SELECT (MAX(e."Original airdate") - MIN(e."Original airdate")) AS days_difference FROM "1-'
+  [60/200] qid=506 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.72 (3914.1ms) -> 'SELECT "Club", "Lost", "Losing bonus", "Points" FROM "2-17941032-1" WHERE "Losing bonus" ='
+  [70/200] qid=582 raw_cfg=False (pfx=0.58) ext_cfg=False comp_f1=0.29 (6958.3ms) -> 'SELECT AVG(CASE WHEN g.Attendance > 5000 THEN g.Result::INTEGER ELSE 0 END) AS average_poi'
+  [80/200] qid=676 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3171.2ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [90/200] qid=798 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.43 (8498.9ms) -> "SELECT MAX(COUNT) AS longest_run FROM (SELECT COUNT(*) AS COUNT, SUM(CASE WHEN Result = 'W"
+  [100/200] qid=888 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (2954.0ms) -> 'SELECT (MAX(t."Date") - MIN(t."Date")) AS days_difference FROM "2-10649583-2" t;'
+  [110/200] qid=1004 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.26 (11731.6ms) -> 'SELECT "2-10361946-2"."Week", (SELECT "2-10361946-2"."Result" FROM "2-10361946-2" WHERE "2'
+  [120/200] qid=1170 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.27 (9619.7ms) -> 'SELECT (AVG(CASE WHEN f.Attendance > 40000 THEN g.Result::INTEGER ELSE 0 END) - AVG(CASE W'
+  [130/200] qid=1246 raw_cfg=False (pfx=0.88) ext_cfg=False comp_f1=0.86 (3323.1ms) -> 'SELECT "Engine" FROM "1-11167610-1" WHERE "Turbo" = \'Yes\' LIMIT 1;'
+  [140/200] qid=1333 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.29 (6649.9ms) -> 'SELECT MAX(COUNT) AS longest_run FROM (SELECT COUNT(*) AS COUNT, (LAG(o.points, 1) OVER (P'
+  [150/200] qid=1431 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3372.3ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [160/200] qid=1533 raw_cfg=False (pfx=0.19) ext_cfg=False comp_f1=0.27 (8246.2ms) -> 'SELECT COUNT(*) FROM "2-17860767-2" WHERE "Result" ilike \'%30%\' OR "Result" ilike \'%31%\' O'
+  [170/200] qid=1591 raw_cfg=False (pfx=0.12) ext_cfg=False comp_f1=0.21 (11770.1ms) -> 'SELECT COUNT(*) FROM "2-18589208-1" WHERE "Result" ilike \'%31%\' OR "Result" ilike \'%32%\' O'
+  [180/200] qid=1727 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3383.5ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [190/200] qid=1824 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.80 (6714.6ms) -> 'SELECT "2-17327264-3"."Date of vacancy" FROM "2-17327264-3" WHERE "2-17327264-3"."Date of '
+  [200/200] qid=1979 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.86 (4000.7ms) -> 'SELECT "Purpose" FROM "2-14155573-2" WHERE "Callsign" = \'8RN\' AND "Area served" = \'Katheri'
+
+📊 [UNWRAPPED] Summary:
+  • LLMSQL Execution Accuracy : 4/200 (2.0%)
+  • SQLite Executable Rate    : 93/200 (46.5%)
+  • SQL Clause/Component F1   : 37.8%
+  • Raw Output SQL:2016 CFG   : 88/200 (44.0%) | Mean Valid Prefix: 76.2%
+  • Extracted SQL:2016 CFG    : 88/200 (44.0%) | Mean Valid Prefix: 76.1%
+  • SQLite Execution Errors   : 118
+  • Mean Decode Latency       : 4684.7 ms
+
+############################################################################
+🧪 Evaluating [OUTLINES] on defog/sqlcoder-7b-2 (mps, torch.float16)
+############################################################################
+✅ Model loaded in 9.56s.
+  [1/200] qid=8 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (8641.1ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [2/200] qid=13 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.08 (3803.3ms) -> 'SELECT (MAX(EXTRACT(DAY FROM to_date)) - MIN(EXTRACT(DAY FROM to_date))) AS days_differenc'
+  [3/200] qid=16 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.32 (5209.9ms) -> "SELECT SUM(CASE WHEN g.result ilike ('%W%') THEN 41 ELSE 0 END) + SUM(CASE WHEN g.result i"
+  [10/200] qid=138 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3719.3ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [20/200] qid=200 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.52 (6734.4ms) -> 'SELECT "1-17594659-1"."Competition" FROM "1-17594659-1" WHERE "1-17594659-1"."Opposition" '
+  [30/200] qid=279 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.40 (5969.1ms) -> 'SELECT "Opponent", SUM(CASE WHEN "Result" = \'W\' THEN 6 ELSE 3 END) AS points_scored FROM "'
+  [40/200] qid=369 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.25 (3190.0ms) -> 'SELECT "Opponent" FROM "1-11326124-3" ORDER BY "Date" DESC NULLS LAST;'
+  [50/200] qid=435 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3599.3ms) -> 'SELECT (MAX(e."Original airdate") - MIN(e."Original airdate")) AS days_difference FROM "1-'
+  [60/200] qid=506 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.72 (4274.0ms) -> 'SELECT "Club", "Lost", "Losing bonus", "Points" FROM "2-17941032-1" WHERE "Losing bonus" ='
+  [70/200] qid=582 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.34 (5539.2ms) -> 'SELECT AVG(CASE WHEN g.Attendance > 5000 THEN g.Result::INTEGER ELSE 0 END) AS average_poi'
+  [80/200] qid=676 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3570.0ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [90/200] qid=798 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.43 (9371.6ms) -> "SELECT MAX(COUNT) AS longest_run FROM (SELECT COUNT(*) AS COUNT, SUM(CASE WHEN Result = 'W"
+  [100/200] qid=888 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3200.6ms) -> 'SELECT (MAX(t."Date") - MIN(t."Date")) AS days_difference FROM "2-10649583-2" t;'
+  [110/200] qid=1004 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.26 (12806.8ms) -> 'SELECT "2-10361946-2"."Week", (SELECT "2-10361946-2"."Result" FROM "2-10361946-2" WHERE "2'
+  [120/200] qid=1170 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.27 (10627.6ms) -> 'SELECT (AVG(CASE WHEN f.Attendance > 40000 THEN g.Result::INTEGER ELSE 0 END) - AVG(CASE W'
+  [130/200] qid=1246 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.69 (4755.9ms) -> 'SELECT "Engine" FROM "1-11167610-1" WHERE "Turbo" = \'Yes\' AND "Engine" ILIKE (\'%Mitsubishi'
+  [140/200] qid=1333 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.29 (7404.8ms) -> 'SELECT MAX(COUNT) AS longest_run FROM (SELECT COUNT(*) AS COUNT, (LAG(o.points, 1) OVER (P'
+  [150/200] qid=1431 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3653.1ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [160/200] qid=1533 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.23 (2973.8ms) -> 'SELECT COUNT(*) FROM "2-17860767-2" WHERE "Result" ilike (\'%30%points%\');'
+  [170/200] qid=1591 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.23 (2876.4ms) -> 'SELECT COUNT(*) FROM "2-18589208-1" WHERE "Result" ilike (\'%31%points%\');'
+  [180/200] qid=1727 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.12 (3638.7ms) -> 'SELECT (MAX(t."Original air date") - MIN(t."Original air date")) AS days_difference FROM "'
+  [190/200] qid=1824 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.80 (6994.3ms) -> 'SELECT "2-17327264-3"."Date of vacancy" FROM "2-17327264-3" WHERE "2-17327264-3"."Date of '
+  [200/200] qid=1979 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.86 (4309.9ms) -> 'SELECT "Purpose" FROM "2-14155573-2" WHERE "Callsign" = \'8RN\' AND "Area served" = \'Katheri'
+
+📊 [OUTLINES] Summary:
+  • LLMSQL Execution Accuracy : 4/200 (2.0%)
+  • SQLite Executable Rate    : 93/200 (46.5%)
+  • SQL Clause/Component F1   : 36.0%
+  • Raw Output SQL:2016 CFG   : 192/200 (96.0%) | Mean Valid Prefix: 100.0%
+  • Extracted SQL:2016 CFG    : 193/200 (96.5%) | Mean Valid Prefix: 100.0%
+  • SQLite Execution Errors   : 118
+  • Mean Decode Latency       : 4995.5 ms

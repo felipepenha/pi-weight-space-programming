@@ -1,0 +1,713 @@
+Task complete.
+
+## Summary
+
+**1. Base model acquisition**
+- Downloaded `codellama/CodeLlama-7b-hf` into `./models/input`:
+  - `model-00001-of-00002.safetensors`, `model-00002-of-00002.safetensors`, `model.safetensors.index.json`
+  - `config.json`, `generation_config.json`, `tokenizer*`, `special_tokens_map.json`
+
+**2. Final-layer localization (`wsp_inspect_weights` / `wsp_circuit_probe`)**
+- Final block MLP (`model.layers.31.mlp.*`):
+  - `gate_proj`: `[11008, 4096]`, BF16, L2 190.45
+  - `up_proj`: `[11008, 4096]`, BF16, L2 184.66
+  - `down_proj`: `[4096, 11008]`, BF16, L2 176.72
+- `mlp_directions` on layer 31 `down_proj`: top singular values `13.25, 10.11, 8.96, ...`; eff. rank `3704`, participation ratio `2087`.
+
+**3. Grammar + compilation**
+- Analyzed `./sql-2016.ebnf`: 2357 total rules, 1357 reachable, entry `direct_SQL_statement`.
+- Wrote 19 calibration and 10 held-out prompts into `.wsp-work/`.
+- Compiled with `steering_gain=8.0`, `use_chat_template=false`, `prompts_file` wired correctly:
+  - 19/19 calibration prompts grammar-valid, 19/19 teacher exact match.
+  - **0 bytes** safetensors size overhead.
+  - Modified only `model.layers.31.mlp.{gate,up,down}_proj`.
+
+**4. Iterative surgery**
+- First compile (gain 10) yielded 8/10 held-out compliance: self-join and LEFT JOIN prompts collapsed into token repetition.
+- Added explicit `JOIN` / self-join / `LEFT JOIN` calibration trajectories and lowered gain to 8.0.
+- Recompile → final held-out `verify_bundle`: **10/10 grammar-valid** (`grammar_compliance_rate: 1.0`).
+
+**5. Final audit**
+- `wsp_compare_checkpoints` confirms exactly **3 changed tensors**, all in layer 31 MLP; every earlier layer and all attention/norm/embedding tensors are bit-identical.
+- Layer 31 delta:
+  - `gate_proj`: L2 diff `72.66`, rel Fro `0.3815`, eff. rank `83.06`
+  - `down_proj`: L2 diff `29.02`, rel Fro `0.1642`, eff. rank `11.27`
+  - `up_proj`: L2 diff `5.47`, rel Fro `0.0296`, eff. rank `12.55`
+
+**Deliverables in `./models/output`**
+- Patched BF16 safetensors shards + index (exact same byte sizes as input)
+- Cleanly copied `config.json`, `generation_config.json`, tokenizer files, `special_tokens_map.json`
+- `manifest.json` and `edit.npz`
+
+The exported bundle can be loaded with unwrapped `AutoModelForCausalLM.from_pretrained("./models/output").generate(...)` and natively emits SQL:2016 statements without any runtime Outlines dependency.
+ℹ️  LLMSQL Eval Config: limit=200 | prompt_style=raw-sql | skip_reference=false | only_qwen=true | qwen_reference=Qwen/Qwen2.5-Coder-0.5B-Instruct
+
+======================================================================
+🧪 4. Evaluating Small Coder Reference Model (Qwen/Qwen2.5-Coder-0.5B-Instruct: Unwrapped + Outlines)
+======================================================================
+
+############################################################################
+🧪 Evaluating [UNWRAPPED] on Qwen/Qwen2.5-Coder-0.5B-Instruct (mps, torch.float16)
+############################################################################
+2026-11-22 15:31:35,381 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct "HTTP/1.1 200 OK"
+2026-11-22 15:31:35,478 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-11-22 15:31:35,571 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-11-22 15:31:35,801 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct "HTTP/1.1 200 OK"
+2026-11-22 15:31:35,895 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct "HTTP/1.1 200 OK"
+W1122 15:31:36.273000 5352 torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 7191.88it/s]
+2026-11-22 15:31:36,554 [INFO] httpx2: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct/resolve/main/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-11-22 15:31:36,555 [WARNING] huggingface_hub.utils._http: Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+✅ Model loaded in 1.44s.
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+  [1/200] qid=8 raw_cfg=False (pfx=0.08) ext_cfg=False comp_f1=0.07 (522.5ms) -> 'SELECT MAX(Original air date) - MIN(Original air date) FROM 2-10953197-7\n\nThis query calcu'
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+  [2/200] qid=13 raw_cfg=False (pfx=0.07) ext_cfg=False comp_f1=0.07 (903.1ms) -> 'SELECT MAX(Date) - MIN(Date) FROM 2-17058417-1\n\nTo answer this question, we need to identi'
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+  [3/200] qid=16 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.18 (800.8ms) -> 'To find the total points scored by the New York Giants over all games in the 1954 New York'
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token " with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+  [10/200] qid=138 raw_cfg=False (pfx=0.08) ext_cfg=False comp_f1=0.07 (541.6ms) -> 'SELECT MAX(Original air date) - MIN(Original air date) AS Days_between_earliest_and_latest'
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "(Y" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "(Y" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "select" doesn't satisfy the grammar; byte 's' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+  [20/200] qid=200 raw_cfg=False (pfx=0.15) ext_cfg=False comp_f1=0.71 (230.3ms) -> "SELECT Competition FROM 1-17594659-1 WHERE Opposition = 'Panathinaikos';"
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+  [30/200] qid=279 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.04 (1202.9ms) -> 'To answer this question, we need to find the opponent with the highest points against the '
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+  [40/200] qid=369 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.06 (837.9ms) -> "Here's the SQL query to answer the question:\n\n```sql\nSELECT Opponent FROM 1-11326124-3 WHE"
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+  [50/200] qid=435 raw_cfg=False (pfx=0.01) ext_cfg=False comp_f1=0.03 (882.6ms) -> "SELECT strftime('%d', '2007-11-01') - strftime('%d', '2007-11-30') AS Days_between_earlies"
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+  [60/200] qid=506 raw_cfg=False (pfx=0.02) ext_cfg=False comp_f1=0.44 (1251.3ms) -> 'SELECT * FROM 2-17941032-1 WHERE Points = 1 AND Losing_bonus = 148 ORDER BY Lost DESC LIMI'
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+  [70/200] qid=582 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.00 (1203.9ms) -> 'To answer this question, we need to calculate the average points scored by opponents in ho'
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+  [80/200] qid=676 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.07 (993.9ms) -> 'To answer this question, we need to find the difference between the earliest and latest Or'
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+  [90/200] qid=798 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.14 (1206.3ms) -> 'To answer this question, we need to find the longest run of consecutive games where the te'
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token " LIMIT" doesn't satisfy the grammar; byte 'L' fails parse; stopping
+Warning: Parser Error: token " LIMIT" doesn't satisfy the grammar; byte 'L' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+  [100/200] qid=888 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.07 (979.4ms) -> 'To answer this question, we need to find the difference between the earliest and latest da'
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "`" doesn't satisfy the grammar; byte '`' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+  [110/200] qid=1004 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.05 (1208.0ms) -> 'To answer this question, we need to find the week with the highest improvement in the team'
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "This" doesn't satisfy the grammar; byte 'T' fails parse; stopping
+Warning: Parser Error: token "This" doesn't satisfy the grammar; byte 'T' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+  [120/200] qid=1170 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.03 (1211.1ms) -> 'To answer this question, we need to calculate the average points scored by the team on hom'
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "select" doesn't satisfy the grammar; byte 's' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+  [130/200] qid=1246 raw_cfg=False (pfx=0.03) ext_cfg=False comp_f1=0.32 (881.5ms) -> "SELECT * FROM 1-11167610-1 WHERE Engine = 'Mitsubishi TD04-15g' AND Turbo = 'Yes' ORDER BY"
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+  [140/200] qid=1333 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.14 (1206.6ms) -> 'To answer this question, we need to find the longest run of consecutive games where the op'
+Warning: Parser Error: token " LIMIT" doesn't satisfy the grammar; byte 'L' fails parse; stopping
+Warning: Parser Error: token " LIMIT" doesn't satisfy the grammar; byte 'L' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token " #" doesn't satisfy the grammar; byte '#' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token " #\n" doesn't satisfy the grammar; byte '#' fails parse; stopping
+Warning: Parser Error: token " #\n" doesn't satisfy the grammar; byte '#' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+  [150/200] qid=1431 raw_cfg=False (pfx=0.08) ext_cfg=False comp_f1=0.07 (438.6ms) -> 'SELECT MAX(Original air date) - MIN(Original air date) FROM 1-22347090-5\n\nThis query calcu'
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token ")" doesn't satisfy the grammar; byte ')' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+  [160/200] qid=1533 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.18 (737.7ms) -> "Here's the SQL query to answer the question:\n\n```sql\nSELECT COUNT(*) FROM 2-17860767-2 WHE"
+Warning: Parser Error: token ".`" doesn't satisfy the grammar; byte '`' fails parse; stopping
+Warning: Parser Error: token ".`" doesn't satisfy the grammar; byte '`' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+  [170/200] qid=1591 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.19 (696.4ms) -> "Here's the SQL query to answer the question:\n\n```sql\nSELECT COUNT(*) FROM 2-18589208-1 WHE"
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+  [180/200] qid=1727 raw_cfg=False (pfx=0.07) ext_cfg=False comp_f1=0.07 (502.8ms) -> 'SELECT MAX(Original air date) - MIN(Original air date) AS Days_between_earliest_and_latest'
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "select" doesn't satisfy the grammar; byte 's' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "```" doesn't satisfy the grammar; byte '`' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "**:" doesn't satisfy the grammar; byte '*' fails parse; stopping
+  [190/200] qid=1824 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.31 (1225.2ms) -> "Here's the step-by-step breakdown:\n\n1. **Identify the relevant table**: The information ab"
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "`" doesn't satisfy the grammar; byte '`' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token " date" doesn't satisfy the grammar; byte 'd' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "2" doesn't satisfy the grammar; byte '2' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "('%" doesn't satisfy the grammar; byte '(' fails parse; stopping
+Warning: Parser Error: token "To" doesn't satisfy the grammar; byte 'o' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "1" doesn't satisfy the grammar; byte '1' fails parse; stopping
+Warning: Parser Error: token "Here" doesn't satisfy the grammar; byte 'H' fails parse; stopping
+Warning: Parser Error: token "with" doesn't satisfy the grammar; byte 'w' fails parse; stopping
+  [200/200] qid=1979 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.15 (1200.7ms) -> "Here's a step-by-step breakdown:\n\n1. **Identify the relevant table**: The question asks ab"
+Evaluating ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+       Evaluation Summary        
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Metric            ┃ Value     ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ Total Samples     │ 200       │
+├───────────────────┼───────────┤
+│ Correct Results   │ 0 (0.00%) │
+├───────────────────┼───────────┤
+│ Prediction None   │ 0/200     │
+├───────────────────┼───────────┤
+│ Ground Truth None │ 0/200     │
+├───────────────────┼───────────┤
+│ SQL Errors        │ 203       │
+└───────────────────┴───────────┘
+2026-11-22 15:34:37,166 [INFO] llmsql-bench: Saved evaluation report to /Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/reference-qwen2.5-coder-0.5b-instruct/llmsql_report_unwrapped.json
+
+📊 [UNWRAPPED] Summary:
+  • LLMSQL Execution Accuracy : 0/200 (0.0%)
+  • SQLite Executable Rate    : 14/200 (7.0%)
+  • SQL Clause/Component F1   : 19.4%
+  • Raw Output SQL:2016 CFG   : 1/200 (0.5%) | Mean Valid Prefix: 3.6%
+  • Extracted SQL:2016 CFG    : 13/200 (6.5%) | Mean Valid Prefix: 18.1%
+  • SQLite Execution Errors   : 203
+  • Mean Decode Latency       : 872.1 ms
+
+############################################################################
+🧪 Evaluating [OUTLINES] on Qwen/Qwen2.5-Coder-0.5B-Instruct (mps, torch.float16)
+############################################################################
+2026-11-22 15:34:37,336 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct "HTTP/1.1 200 OK"
+2026-11-22 15:34:37,427 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-11-22 15:34:37,520 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-11-22 15:34:37,721 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct "HTTP/1.1 200 OK"
+2026-11-22 15:34:37,807 [INFO] httpx2: HTTP Request: GET https://huggingface.co/api/models/Qwen/Qwen2.5-Coder-0.5B-Instruct "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 6844.80it/s]
+2026-11-22 15:34:37,976 [INFO] httpx2: HTTP Request: HEAD https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct/resolve/main/custom_generate/generate.py "HTTP/1.1 404 Not Found"
+✅ Model loaded in 0.92s.
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [1/200] qid=8 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2789.6ms) -> 'SELECT MAX(Original airdate_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TI'
+  [2/200] qid=13 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.09 (368.6ms) -> 'SELECT MAX(Date) - MIN(Date) FROM  "2-17058417-1";'
+  [3/200] qid=16 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.19 (589.2ms) -> 'SELECT SUM(Attendance) FROM  "2-15765440-1" WHERE Week = 1 AND Result = \'W\' AND Opponent ='
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [10/200] qid=138 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2112.5ms) -> 'SELECT MAX(Original airdate_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TI'
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [20/200] qid=200 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.70 (450.9ms) -> 'SELECT Competition FROM  "1-17594659-1" WHERE "Opposition" =  "Panathinaikos";'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [30/200] qid=279 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.09 (169.7ms) -> 'SELECT Opponent FROM  ('
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [40/200] qid=369 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.13 (2137.7ms) -> 'SELECT Opponent FROM  "1-11326124-3" ORDER BY Date DESCLIMIT'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [50/200] qid=435 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2126.4ms) -> 'SELECT strftime "%d", MAX(Original airdateISO8601ISO8601ISO8601ISO8601ISO8601ISO8601ISO860'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [60/200] qid=506 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.60 (603.4ms) -> 'SELECT * FROM  "2-17941032-1" WHERE "Losing bonus" = 1 AND "Points" = 148 ORDER BY "Points'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [70/200] qid=582 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.15 (2370.8ms) -> 'SELECT AVG(Attendance) FROM  "2-10362070-3" WHERE Week = 1 AND Opponent = \'Minnesota Vikin'
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [80/200] qid=676 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2126.6ms) -> 'SELECT strftime "%d", MIN(Original airdateiso8601iso8601iso8601iso8601iso8601iso8601iso860'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [90/200] qid=798 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.23 (647.2ms) -> 'SELECT Week, MAX(Attendance) AS LongestRun\nFROM  "2-18733271-1"\nWHERE Result = \'W\'\nGROUP B'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [100/200] qid=888 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.09 (365.4ms) -> 'SELECT MAX(Date) - MIN(Date) FROM  "2-10649583-2";'
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [110/200] qid=1004 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.15 (419.6ms) -> 'SELECT Week FROM  "2-10361946-2" ORDER BY Point_Margin DESC, Week ASC;'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [120/200] qid=1170 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.06 (178.1ms) -> 'SELECT CAST(SUM(CASE'
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [130/200] qid=1246 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.55 (744.3ms) -> 'SELECT * FROM  "1-11167610-1" WHERE "Turbo" = \'Yes\' AND "Engine" = \'Mitsubishi TD04-15g\' O'
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [140/200] qid=1333 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.18 (759.8ms) -> 'SELECT Week, MAX(Attendance) AS LongestRun\nFROM  "2-10650160-2"\nWHERE Result = \'W\'\nGROUP B'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [150/200] qid=1431 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.09 (472.5ms) -> 'SELECT MAX(Original airdate_TIMESTAMP()) - MIN(Original airdate_TIMESTAMP()) FROM  "1-2234'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [160/200] qid=1533 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.18 (2277.1ms) -> 'SELECT COUNT(*) FROM  "2-17860767-2" WHERE Result = \'L 30–30\' OR Result = \'L 40–40\' OR Res'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [170/200] qid=1591 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.23 (696.5ms) -> 'SELECT COUNT(*) FROM  "2-18589208-1" WHERE Result = \'W 31–20\' OR Result = \'L 33–3\' OR Resu'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [180/200] qid=1727 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2113.9ms) -> 'SELECT MAX(Original airdate_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TI'
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token " (;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token "(;" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: parser error: Too many items (limit 50000; mask); try avoiding single-byte/short lexemes; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [190/200] qid=1824 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.76 (666.5ms) -> 'SELECT Date_of_vacancy FROM  "2-17327264-3" WHERE "Date of appointment" = \'2 November 2009'
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+Warning: Parser Error: token ";" doesn't satisfy the grammar; byte ';' fails parse; stopping
+  [200/200] qid=1979 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.47 (598.1ms) -> 'SELECT Purpose FROM  "2-14155573-2" WHERE Frequency = \'8RN\' AND Area served  (\'Northern Te'
+Evaluating ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
+       Evaluation Summary        
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Metric            ┃ Value     ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ Total Samples     │ 200       │
+├───────────────────┼───────────┤
+│ Correct Results   │ 7 (3.50%) │
+├───────────────────┼───────────┤
+│ Prediction None   │ 19/200    │
+├───────────────────┼───────────┤
+│ Ground Truth None │ 0/200     │
+├───────────────────┼───────────┤
+│ SQL Errors        │ 154       │
+└───────────────────┴───────────┘
+2026-11-22 15:38:02,900 [INFO] llmsql-bench: Saved evaluation report to /Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/reference-qwen2.5-coder-0.5b-instruct/llmsql_report_outlines.json
+
+📊 [OUTLINES] Summary:
+  • LLMSQL Execution Accuracy : 7/200 (3.5%)
+  • SQLite Executable Rate    : 68/200 (34.0%)
+  • SQL Clause/Component F1   : 25.1%
+  • Raw Output SQL:2016 CFG   : 115/200 (57.5%) | Mean Valid Prefix: 100.0%
+  • Extracted SQL:2016 CFG    : 120/200 (60.0%) | Mean Valid Prefix: 97.2%
+  • SQLite Execution Errors   : 154
+  • Mean Decode Latency       : 993.4 ms
+
+✅ Saved evaluation summary to /Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/reference-qwen2.5-coder-0.5b-instruct/summary.json
+
+======================================================================
+📊 Performance Comparison Across All Evaluated Models
+======================================================================
+### Overall Performance Comparison
+
+Benchmark: `llmsql-2.0` | Questions: `200` | Prompt Style: `raw-sql` | Seed: `42`
+
+| Model / Mode | LLMSQL EX | SQLite Executable | SQL Component F1 | Raw SQL:2016 CFG | Valid CFG Prefix | Extracted CFG | Mean Latency | Weight Delta |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| CodeLlama-7b-hf (Baseline, Unwrapped) | 7/200 (3.5%) | 164/200 (82.0%) | 37.8% | 32/200 (16.0%) | 44.5% | 107/200 (53.5%) | 11,743.6 ms (`1.08x`) | 0 B |
+| CodeLlama-7b-hf (Baseline + Outlines) | 6/200 (3.0%) | 159/200 (79.5%) | 37.4% | 106/200 (53.0%) | 100.0% | 137/200 (68.5%) | 12,701.8 ms (`1.00x`) | 0 B |
+| CodeLlama-7b-hf (Weight-Compiled [deepseek-v4.1-flash], Unwrapped) | 4/200 (2.0%) | 141/200 (70.5%) | 36.2% | 114/200 (57.0%) | 75.8% | 118/200 (59.0%) | 6,527.8 ms (`1.95x`) | 0 B |
+| CodeLlama-7b-hf (Weight-Compiled [deepseek-v4.1-flash] + Outlines) | 3/200 (1.5%) | 146/200 (73.0%) | 36.9% | 116/200 (58.0%) | 100.0% | 145/200 (72.5%) | 7,788.7 ms (`1.63x`) | 0 B |
+| CodeLlama-7b-hf (Weight-Compiled [deepseek-v4-pro], Unwrapped) | 4/200 (2.0%) | 123/200 (61.5%) | 33.6% | 75/200 (37.5%) | 74.9% | 96/200 (48.0%) | 6,438.4 ms (`1.97x`) | 0 B |
+| CodeLlama-7b-hf (Weight-Compiled [deepseek-v4-pro] + Outlines) | 4/200 (2.0%) | 103/200 (51.5%) | 31.5% | 79/200 (39.5%) | 100.0% | 118/200 (59.0%) | 9,306.7 ms (`1.36x`) | 0 B |
+| defog/sqlcoder-7b-2 (Fine-Tuned Ref., Unwrapped) | 4/200 (2.0%) | 93/200 (46.5%) | 37.8% | 88/200 (44.0%) | 76.2% | 88/200 (44.0%) | 4,684.7 ms (`2.71x`) | — |
+| defog/sqlcoder-7b-2 (Fine-Tuned Ref. + Outlines) | 4/200 (2.0%) | 93/200 (46.5%) | 36.0% | 192/200 (96.0%) | 100.0% | 193/200 (96.5%) | 4,995.5 ms (`2.54x`) | — |
+| Qwen/Qwen2.5-Coder-0.5B-Instruct (Small Ref., Unwrapped) | 0/200 (0.0%) | 14/200 (7.0%) | 19.4% | 1/200 (0.5%) | 3.6% | 13/200 (6.5%) | 872.1 ms (`14.56x`) | — |
+| Qwen/Qwen2.5-Coder-0.5B-Instruct (Small Ref. + Outlines) | 7/200 (3.5%) | 68/200 (34.0%) | 25.1% | 115/200 (57.5%) | 100.0% | 120/200 (60.0%) | 993.4 ms (`12.79x`) | — |
+
+### SQL Clause / Component F1 & Category Breakdown
+
+| Model / Mode | Clauses F1 | Functions F1 | Identifiers F1 | Select F1 | Where F1 | `lookup` EX | `convention` EX | `text_quantity` EX |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| CodeLlama-7b-hf (Baseline, Unwrapped) | 51.1% | 17.4% | 43.2% | 49.5% | 28.4% | 6/67 (9%) | 0/67 (0%) | 1/66 (2%) |
+| CodeLlama-7b-hf (Baseline + Outlines) | 49.9% | 14.6% | 42.6% | 49.5% | 30.3% | 5/67 (7%) | 0/67 (0%) | 1/66 (2%) |
+| CodeLlama-7b-hf (Weight-Compiled [deepseek-v4.1-flash], Unwrapped) | 47.1% | 17.6% | 41.8% | 50.5% | 29.2% | 4/67 (6%) | 0/67 (0%) | 0/66 (0%) |
+| CodeLlama-7b-hf (Weight-Compiled [deepseek-v4.1-flash] + Outlines) | 49.1% | 14.9% | 42.2% | 50.5% | 30.3% | 3/67 (4%) | 0/67 (0%) | 0/66 (0%) |
+| CodeLlama-7b-hf (Weight-Compiled [deepseek-v4-pro], Unwrapped) | 47.9% | 10.2% | 36.9% | 45.5% | 24.8% | 4/67 (6%) | 0/67 (0%) | 0/66 (0%) |
+| CodeLlama-7b-hf (Weight-Compiled [deepseek-v4-pro] + Outlines) | 44.2% | 7.6% | 34.8% | 45.5% | 25.5% | 4/67 (6%) | 0/67 (0%) | 0/66 (0%) |
+| defog/sqlcoder-7b-2 (Fine-Tuned Ref., Unwrapped) | 53.9% | 18.0% | 42.9% | 42.1% | 27.3% | 4/67 (6%) | 0/67 (0%) | 0/66 (0%) |
+| defog/sqlcoder-7b-2 (Fine-Tuned Ref. + Outlines) | 54.8% | 13.9% | 40.9% | 42.1% | 25.8% | 4/67 (6%) | 0/67 (0%) | 0/66 (0%) |
+| Qwen/Qwen2.5-Coder-0.5B-Instruct (Small Ref., Unwrapped) | 39.4% | 11.8% | 5.3% | 17.5% | 14.8% | 0/67 (0%) | 0/67 (0%) | 0/66 (0%) |
+| Qwen/Qwen2.5-Coder-0.5B-Instruct (Small Ref. + Outlines) | 41.6% | 11.3% | 22.5% | 20.0% | 23.6% | 5/67 (7%) | 2/67 (3%) | 0/66 (0%) |
+
+✅ Saved comparison tables to /Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/comparison_summary.md and /Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/codellama-7b/eval/runs/comparison_summary.json
+
