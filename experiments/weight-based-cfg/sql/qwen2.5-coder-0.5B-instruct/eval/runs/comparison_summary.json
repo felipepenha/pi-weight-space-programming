@@ -1,0 +1,164 @@
+{
+  "benchmark": "llmsql-2.0",
+  "sampled_questions": 200,
+  "prompt_style": "raw-sql",
+  "seed": 42,
+  "models": [
+    {
+      "label": "Qwen2.5-Coder-0.5B-Instruct (Baseline, Unwrapped)",
+      "run_dir": "baseline",
+      "mode": "unwrapped",
+      "total_questions": 200,
+      "execution_accuracy": 0.0,
+      "sqlite_executable_rate": 0.07,
+      "mean_sql_component_f1": 0.1941,
+      "raw_cfg_compliance_rate": 0.005,
+      "mean_raw_cfg_prefix_ratio": 0.0356,
+      "extracted_sql_cfg_compliance_rate": 0.065,
+      "mean_latency_ms": 872.8,
+      "speedup_vs_outlines": 1.1543,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.3937,
+        "functions_f1": 0.1177,
+        "identifiers_f1": 0.0533,
+        "select_f1": 0.175,
+        "where_f1": 0.1476
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        }
+      }
+    },
+    {
+      "label": "Qwen2.5-Coder-0.5B-Instruct (Baseline + Outlines)",
+      "run_dir": "baseline",
+      "mode": "outlines",
+      "total_questions": 200,
+      "execution_accuracy": 0.035,
+      "sqlite_executable_rate": 0.34,
+      "mean_sql_component_f1": 0.2507,
+      "raw_cfg_compliance_rate": 0.575,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_rate": 0.6,
+      "mean_latency_ms": 1007.5,
+      "speedup_vs_outlines": 1.0,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4162,
+        "functions_f1": 0.113,
+        "identifiers_f1": 0.2247,
+        "select_f1": 0.2,
+        "where_f1": 0.2357
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 2,
+          "accuracy": 0.0299
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 5,
+          "accuracy": 0.0746
+        }
+      }
+    },
+    {
+      "label": "Qwen2.5-Coder-0.5B-Instruct (Weight-Compiled, Unwrapped)",
+      "run_dir": "output-unwrapped",
+      "mode": "unwrapped",
+      "total_questions": 200,
+      "execution_accuracy": 0.0,
+      "sqlite_executable_rate": 0.025,
+      "mean_sql_component_f1": 0.1937,
+      "raw_cfg_compliance_rate": 0.0,
+      "mean_raw_cfg_prefix_ratio": 0.0,
+      "extracted_sql_cfg_compliance_rate": 0.0,
+      "mean_latency_ms": 1144.2,
+      "speedup_vs_outlines": 0.8805,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.3994,
+        "functions_f1": 0.0887,
+        "identifiers_f1": 0.0651,
+        "select_f1": 0.035,
+        "where_f1": 0.1615
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 0,
+          "accuracy": 0.0
+        }
+      }
+    },
+    {
+      "label": "Qwen2.5-Coder-0.5B-Instruct (Weight-Compiled + Outlines)",
+      "run_dir": "output-unwrapped",
+      "mode": "outlines",
+      "total_questions": 200,
+      "execution_accuracy": 0.035,
+      "sqlite_executable_rate": 0.335,
+      "mean_sql_component_f1": 0.2448,
+      "raw_cfg_compliance_rate": 0.535,
+      "mean_raw_cfg_prefix_ratio": 1.0,
+      "extracted_sql_cfg_compliance_rate": 0.56,
+      "mean_latency_ms": 933.6,
+      "speedup_vs_outlines": 1.0792,
+      "safetensors_delta_vs_input_bytes": 0,
+      "sql_component_f1_breakdown": {
+        "clauses_f1": 0.4123,
+        "functions_f1": 0.0837,
+        "identifiers_f1": 0.2316,
+        "select_f1": 0.205,
+        "where_f1": 0.2226
+      },
+      "category_breakdown": {
+        "text_quantity": {
+          "total": 66,
+          "matches": 0,
+          "accuracy": 0.0
+        },
+        "convention": {
+          "total": 67,
+          "matches": 2,
+          "accuracy": 0.0299
+        },
+        "lookup": {
+          "total": 67,
+          "matches": 5,
+          "accuracy": 0.0746
+        }
+      }
+    }
+  ]
+}

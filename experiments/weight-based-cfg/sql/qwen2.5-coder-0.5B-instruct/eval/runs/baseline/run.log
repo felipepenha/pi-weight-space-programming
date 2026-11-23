@@ -1,0 +1,76 @@
+
+############################################################################
+🧪 Evaluating [UNWRAPPED] on /Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/qwen2.5-coder-0.5B-instruct/models/input (mps, torch.float16)
+############################################################################
+✅ Model loaded in 1.80s.
+  [1/200] qid=8 raw_cfg=False (pfx=0.08) ext_cfg=False comp_f1=0.07 (582.3ms) -> 'SELECT MAX(Original air date) - MIN(Original air date) FROM 2-10953197-7\n\nThis query calcu'
+  [2/200] qid=13 raw_cfg=False (pfx=0.07) ext_cfg=False comp_f1=0.07 (900.8ms) -> 'SELECT MAX(Date) - MIN(Date) FROM 2-17058417-1\n\nTo answer this question, we need to identi'
+  [3/200] qid=16 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.18 (795.7ms) -> 'To find the total points scored by the New York Giants over all games in the 1954 New York'
+  [10/200] qid=138 raw_cfg=False (pfx=0.08) ext_cfg=False comp_f1=0.07 (466.9ms) -> 'SELECT MAX(Original air date) - MIN(Original air date) AS Days_between_earliest_and_latest'
+  [20/200] qid=200 raw_cfg=False (pfx=0.15) ext_cfg=False comp_f1=0.71 (226.2ms) -> "SELECT Competition FROM 1-17594659-1 WHERE Opposition = 'Panathinaikos';"
+  [30/200] qid=279 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.04 (1207.1ms) -> 'To answer this question, we need to find the opponent with the highest points against the '
+  [40/200] qid=369 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.06 (838.4ms) -> "Here's the SQL query to answer the question:\n\n```sql\nSELECT Opponent FROM 1-11326124-3 WHE"
+  [50/200] qid=435 raw_cfg=False (pfx=0.01) ext_cfg=False comp_f1=0.03 (885.5ms) -> "SELECT strftime('%d', '2007-11-01') - strftime('%d', '2007-11-30') AS Days_between_earlies"
+  [60/200] qid=506 raw_cfg=False (pfx=0.02) ext_cfg=False comp_f1=0.44 (1215.9ms) -> 'SELECT * FROM 2-17941032-1 WHERE Points = 1 AND Losing_bonus = 148 ORDER BY Lost DESC LIMI'
+  [70/200] qid=582 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.00 (1208.4ms) -> 'To answer this question, we need to calculate the average points scored by opponents in ho'
+  [80/200] qid=676 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.07 (995.6ms) -> 'To answer this question, we need to find the difference between the earliest and latest Or'
+  [90/200] qid=798 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.14 (1210.5ms) -> 'To answer this question, we need to find the longest run of consecutive games where the te'
+  [100/200] qid=888 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.07 (985.0ms) -> 'To answer this question, we need to find the difference between the earliest and latest da'
+  [110/200] qid=1004 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.05 (1214.1ms) -> 'To answer this question, we need to find the week with the highest improvement in the team'
+  [120/200] qid=1170 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.03 (1214.6ms) -> 'To answer this question, we need to calculate the average points scored by the team on hom'
+  [130/200] qid=1246 raw_cfg=False (pfx=0.03) ext_cfg=False comp_f1=0.32 (882.9ms) -> "SELECT * FROM 1-11167610-1 WHERE Engine = 'Mitsubishi TD04-15g' AND Turbo = 'Yes' ORDER BY"
+  [140/200] qid=1333 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.14 (1210.7ms) -> 'To answer this question, we need to find the longest run of consecutive games where the op'
+  [150/200] qid=1431 raw_cfg=False (pfx=0.08) ext_cfg=False comp_f1=0.07 (438.5ms) -> 'SELECT MAX(Original air date) - MIN(Original air date) FROM 1-22347090-5\n\nThis query calcu'
+  [160/200] qid=1533 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.18 (738.8ms) -> "Here's the SQL query to answer the question:\n\n```sql\nSELECT COUNT(*) FROM 2-17860767-2 WHE"
+  [170/200] qid=1591 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.19 (696.5ms) -> "Here's the SQL query to answer the question:\n\n```sql\nSELECT COUNT(*) FROM 2-18589208-1 WHE"
+  [180/200] qid=1727 raw_cfg=False (pfx=0.07) ext_cfg=False comp_f1=0.07 (502.3ms) -> 'SELECT MAX(Original air date) - MIN(Original air date) AS Days_between_earliest_and_latest'
+  [190/200] qid=1824 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.31 (1227.8ms) -> "Here's the step-by-step breakdown:\n\n1. **Identify the relevant table**: The information ab"
+  [200/200] qid=1979 raw_cfg=False (pfx=0.00) ext_cfg=False comp_f1=0.15 (1201.6ms) -> "Here's a step-by-step breakdown:\n\n1. **Identify the relevant table**: The question asks ab"
+
+📊 [UNWRAPPED] Summary:
+  • LLMSQL Execution Accuracy : 0/200 (0.0%)
+  • SQLite Executable Rate    : 14/200 (7.0%)
+  • SQL Clause/Component F1   : 19.4%
+  • Raw Output SQL:2016 CFG   : 1/200 (0.5%) | Mean Valid Prefix: 3.6%
+  • Extracted SQL:2016 CFG    : 13/200 (6.5%) | Mean Valid Prefix: 18.1%
+  • SQLite Execution Errors   : 203
+  • Mean Decode Latency       : 872.8 ms
+  • Safetensors Byte Delta    : 0 bytes
+
+############################################################################
+🧪 Evaluating [OUTLINES] on /Users/fcpenha/git/pi-weight-space-programming/experiments/weight-based-cfg/sql/qwen2.5-coder-0.5B-instruct/models/input (mps, torch.float16)
+############################################################################
+✅ Model loaded in 0.26s.
+  [1/200] qid=8 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (4069.8ms) -> 'SELECT MAX(Original airdate_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TI'
+  [2/200] qid=13 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.09 (374.9ms) -> 'SELECT MAX(Date) - MIN(Date) FROM  "2-17058417-1";'
+  [3/200] qid=16 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.19 (589.7ms) -> 'SELECT SUM(Attendance) FROM  "2-15765440-1" WHERE Week = 1 AND Result = \'W\' AND Opponent ='
+  [10/200] qid=138 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2152.3ms) -> 'SELECT MAX(Original airdate_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TI'
+  [20/200] qid=200 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.70 (461.8ms) -> 'SELECT Competition FROM  "1-17594659-1" WHERE "Opposition" =  "Panathinaikos";'
+  [30/200] qid=279 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.09 (166.7ms) -> 'SELECT Opponent FROM  ('
+  [40/200] qid=369 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.13 (2165.6ms) -> 'SELECT Opponent FROM  "1-11326124-3" ORDER BY Date DESCLIMIT'
+  [50/200] qid=435 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2151.9ms) -> 'SELECT strftime "%d", MAX(Original airdateISO8601ISO8601ISO8601ISO8601ISO8601ISO8601ISO860'
+  [60/200] qid=506 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.60 (604.7ms) -> 'SELECT * FROM  "2-17941032-1" WHERE "Losing bonus" = 1 AND "Points" = 148 ORDER BY "Points'
+  [70/200] qid=582 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.15 (2375.3ms) -> 'SELECT AVG(Attendance) FROM  "2-10362070-3" WHERE Week = 1 AND Opponent = \'Minnesota Vikin'
+  [80/200] qid=676 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2129.7ms) -> 'SELECT strftime "%d", MIN(Original airdateiso8601iso8601iso8601iso8601iso8601iso8601iso860'
+  [90/200] qid=798 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.23 (652.7ms) -> 'SELECT Week, MAX(Attendance) AS LongestRun\nFROM  "2-18733271-1"\nWHERE Result = \'W\'\nGROUP B'
+  [100/200] qid=888 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.09 (372.1ms) -> 'SELECT MAX(Date) - MIN(Date) FROM  "2-10649583-2";'
+  [110/200] qid=1004 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.15 (422.6ms) -> 'SELECT Week FROM  "2-10361946-2" ORDER BY Point_Margin DESC, Week ASC;'
+  [120/200] qid=1170 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.06 (179.7ms) -> 'SELECT CAST(SUM(CASE'
+  [130/200] qid=1246 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.55 (755.5ms) -> 'SELECT * FROM  "1-11167610-1" WHERE "Turbo" = \'Yes\' AND "Engine" = \'Mitsubishi TD04-15g\' O'
+  [140/200] qid=1333 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.18 (768.0ms) -> 'SELECT Week, MAX(Attendance) AS LongestRun\nFROM  "2-10650160-2"\nWHERE Result = \'W\'\nGROUP B'
+  [150/200] qid=1431 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.09 (474.0ms) -> 'SELECT MAX(Original airdate_TIMESTAMP()) - MIN(Original airdate_TIMESTAMP()) FROM  "1-2234'
+  [160/200] qid=1533 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.18 (2269.1ms) -> 'SELECT COUNT(*) FROM  "2-17860767-2" WHERE Result = \'L 30–30\' OR Result = \'L 40–40\' OR Res'
+  [170/200] qid=1591 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.23 (706.6ms) -> 'SELECT COUNT(*) FROM  "2-18589208-1" WHERE Result = \'W 31–20\' OR Result = \'L 33–3\' OR Resu'
+  [180/200] qid=1727 raw_cfg=False (pfx=1.00) ext_cfg=False comp_f1=0.04 (2139.2ms) -> 'SELECT MAX(Original airdate_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP_TI'
+  [190/200] qid=1824 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.76 (674.3ms) -> 'SELECT Date_of_vacancy FROM  "2-17327264-3" WHERE "Date of appointment" = \'2 November 2009'
+  [200/200] qid=1979 raw_cfg=True (pfx=1.00) ext_cfg=True comp_f1=0.47 (605.1ms) -> 'SELECT Purpose FROM  "2-14155573-2" WHERE Frequency = \'8RN\' AND Area served  (\'Northern Te'
+
+📊 [OUTLINES] Summary:
+  • LLMSQL Execution Accuracy : 7/200 (3.5%)
+  • SQLite Executable Rate    : 68/200 (34.0%)
+  • SQL Clause/Component F1   : 25.1%
+  • Raw Output SQL:2016 CFG   : 115/200 (57.5%) | Mean Valid Prefix: 100.0%
+  • Extracted SQL:2016 CFG    : 120/200 (60.0%) | Mean Valid Prefix: 97.2%
+  • SQLite Execution Errors   : 154
+  • Mean Decode Latency       : 1007.5 ms
+  • Safetensors Byte Delta    : 0 bytes

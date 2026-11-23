@@ -1,0 +1,20 @@
+[project]
+name = "weight-based-cfg-sql-qwen2-5-coder-0-5b-instruct-example"
+version = "0.1.0"
+description = "Compile verbatim ISO SQL:2016 EBNF grammar into Qwen2.5-Coder-0.5B-Instruct final-layer MLP weights via outlines-cfg-compilation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "accelerate>=0.26.0",
+    "llguidance>=0.7.0",
+    "numpy>=1.26.0",
+    "outlines>=1.0.0",
+    "protobuf>=4.25.0",
+    "safetensors>=0.4.0",
+    "sentencepiece>=0.2.0",
+    "torch>=2.2.0",
+    "transformers>=4.48.0",
+]
+
+[tool.uv]
+package = false
